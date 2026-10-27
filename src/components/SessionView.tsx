@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ArrowLeft, Save, Gauge, History, TrendingUp, Activity, Trash2, Clock } from 'lucide-react';
 import { supabase, type Exercise, type PracticeSession } from '@/lib/supabase';
+import { t, tp, dateLocale, categoryLabel } from '@/lib/i18n';
 
 type Props = {
   exercise: Exercise;
@@ -41,7 +42,7 @@ export function SessionView({ exercise, onBack }: Props) {
     });
     setSaving(false);
     if (error) {
-      alert('Erro ao salvar sessão.');
+      alert(t('error_save_session'));
       return;
     }
     setSaved(true);
@@ -53,10 +54,10 @@ export function SessionView({ exercise, onBack }: Props) {
   };
 
   const handleDeleteSession = async (id: string) => {
-    if (!confirm('Excluir este registro de sessão?')) return;
+    if (!confirm(t('confirm_delete_session'))) return;
     const { error } = await supabase.from('practice_sessions').delete().eq('id', id);
     if (error) {
-      alert('Erro ao excluir sessão.');
+      alert(t('error_delete_session'));
       return;
     }
     fetchSessions();
@@ -68,17 +69,23 @@ export function SessionView({ exercise, onBack }: Props) {
     : null;
   const lastBpm = sessions.length > 0 ? sessions[0].bpm : null;
 
+  const tensionTier = (level: number) => {
+    if (level <= 3) return 1;
+    if (level <= 6) return 2;
+    return 3;
+  };
+
   const tensionLabel = (level: number) => {
-    if (level <= 2) return 'Relaxado';
-    if (level <= 4) return 'Leve';
-    if (level <= 6) return 'Moderado';
-    if (level <= 8) return 'Alto';
-    return 'Muito alto';
+    const tier = tensionTier(level);
+    if (tier === 1) return t('tension_low');
+    if (tier === 2) return t('tension_medium');
+    return t('tension_high');
   };
 
   const tensionColor = (level: number) => {
-    if (level <= 3) return 'text-accent-500';
-    if (level <= 6) return 'text-amber-500';
+    const tier = tensionTier(level);
+    if (tier === 1) return 'text-accent-500';
+    if (tier === 2) return 'text-amber-500';
     return 'text-brand-500';
   };
 
@@ -90,7 +97,7 @@ export function SessionView({ exercise, onBack }: Props) {
         className="flex items-center gap-2 text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors mb-6 group"
       >
         <ArrowLeft className="h-4 w-4 group-hover:-translate-x-1 transition-transform" />
-        Voltar para exercícios
+        {t('back_to_exercises')}
       </button>
 
       <div className="grid gap-6 lg:grid-cols-5">
@@ -107,7 +114,7 @@ export function SessionView({ exercise, onBack }: Props) {
                 </h1>
                 {exercise.category && (
                   <span className="inline-block mt-1 text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-                    {exercise.category}
+                    {categoryLabel(exercise.category)}
                   </span>
                 )}
               </div>
@@ -122,17 +129,17 @@ export function SessionView({ exercise, onBack }: Props) {
             {/* Stats */}
             <div className="grid grid-cols-3 gap-3 mb-6">
               <StatCard
-                label="Sessões"
+                label={t('stat_sessions')}
                 value={sessions.length.toString()}
                 icon={<Activity className="h-4 w-4" />}
               />
               <StatCard
-                label="BPM médio"
+                label={t('stat_avg_bpm')}
                 value={avgBpm !== null ? avgBpm.toString() : '—'}
                 icon={<TrendingUp className="h-4 w-4" />}
               />
               <StatCard
-                label="BPM recorde"
+                label={t('stat_record_bpm')}
                 value={maxBpm !== null ? maxBpm.toString() : '—'}
                 icon={<Gauge className="h-4 w-4" />}
               />
@@ -142,42 +149,45 @@ export function SessionView({ exercise, onBack }: Props) {
             <div className="mb-6">
               <div className="flex items-center justify-between mb-3">
                 <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
-                  Nível de tensão
+                  {t('tension_label')}
                 </label>
                 <span className={`text-sm font-semibold ${tensionColor(tension)}`}>
-                  {tension} / 10 — {tensionLabel(tension)}
+                  {tensionLabel(tension)}
                 </span>
               </div>
-              <input
-                type="range"
-                min={1}
-                max={10}
-                value={tension}
-                onChange={(e) => setTension(parseInt(e.target.value, 10))}
-                className="w-full h-2 rounded-full appearance-none cursor-pointer tension-slider"
-                style={{
-                  background: `linear-gradient(to right, ${
-                    tension <= 3 ? '#22c55e' : tension <= 6 ? '#f59e0b' : '#f04438'
-                  } ${((tension - 1) / 9) * 100}%, #e5e7eb ${((tension - 1) / 9) * 100}%)`,
-                }}
-              />
-              <div className="flex justify-between mt-2 text-xs text-gray-400">
-                <span>Relaxado</span>
-                <span>Muito tenso</span>
+              <div className="grid grid-cols-3 gap-2">
+                {[1, 5, 10].map((level) => (
+                  <button
+                    key={level}
+                    onClick={() => setTension(level)}
+                    className={`flex items-center justify-center py-2.5 rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
+                      tensionTier(tension) === tensionTier(level)
+                        ? tensionTier(level) === 1
+                          ? 'bg-accent-500 hover:bg-accent-600 text-white shadow-md'
+                          : tensionTier(level) === 2
+                            ? 'bg-amber-500 hover:bg-amber-600 text-white'
+                            : 'bg-brand-500 hover:bg-brand-600 text-white'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {tensionLabel(level)}
+                  </button>
+                ))}
               </div>
             </div>
 
             {/* BPM input */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
-                BPM alcançado
+                {t('bpm_achieved')}
               </label>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setBpm((b) => Math.max(1, b - 5))}
+                  onClick={() => setBpm((b) => Math.max(1, b - 1))}
                   className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-xl font-bold transition-colors active:scale-95"
+                  aria-label={t('bpm_minus_one')}
                 >
-                  −5
+                  −1
                 </button>
                 <input
                   type="number"
@@ -186,17 +196,45 @@ export function SessionView({ exercise, onBack }: Props) {
                   className="flex-1 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
                 />
                 <button
-                  onClick={() => setBpm((b) => b + 5)}
+                  onClick={() => setBpm((b) => b + 1)}
                   className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-xl font-bold transition-colors active:scale-95"
+                  aria-label={t('bpm_plus_one')}
+                >
+                  +1
+                </button>
+              </div>
+              <div className="flex items-center gap-3 mt-4">
+                <button
+                  onClick={() => setBpm((b) => Math.max(1, b - 5))}
+                  className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-lg font-bold transition-colors active:scale-95"
+                  aria-label={t('bpm_minus_five')}
+                >
+                  −5
+                </button>
+                <input
+                  type="range"
+                  min={1}
+                  max={300}
+                  value={Math.min(300, bpm)}
+                  onChange={(e) => setBpm(Math.max(1, Math.min(300, Math.round(Number(e.target.value) || 1))))}
+                  className="w-full h-2 rounded-full appearance-none cursor-pointer bpm-slider"
+                  style={{
+                    background: `linear-gradient(to right, #f04438 ${((Math.min(300, bpm) - 1) / 299) * 100}%, #e5e7eb ${((Math.min(300, bpm) - 1) / 299) * 100}%)`,
+                  }}
+                />
+                <button
+                  onClick={() => setBpm((b) => b + 5)}
+                  className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-lg font-bold transition-colors active:scale-95"
+                  aria-label={t('bpm_plus_five')}
                 >
                   +5
                 </button>
               </div>
               {exercise.target_bpm && (
                 <p className="text-xs text-gray-400 mt-2 text-center">
-                  Meta: {exercise.target_bpm} BPM
+                  {t('goal_line', { bpm: exercise.target_bpm })}
                   {bpm >= exercise.target_bpm && (
-                    <span className="text-accent-500 font-medium ml-1">— Meta atingida!</span>
+                    <span className="text-accent-500 font-medium ml-1">{t('goal_reached')}</span>
                   )}
                 </p>
               )}
@@ -205,12 +243,12 @@ export function SessionView({ exercise, onBack }: Props) {
             {/* Notes */}
             <div className="mb-6">
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-                Anotações
+                {t('notes_label')}
               </label>
               <textarea
                 value={notes}
                 onChange={(e) => setNotes(e.target.value)}
-                placeholder="Como foi o treino? O que melhorar na próxima?"
+                placeholder={t('placeholder_notes')}
                 rows={3}
                 className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all resize-none"
               />
@@ -225,12 +263,12 @@ export function SessionView({ exercise, onBack }: Props) {
               {saved ? (
                 <>
                   <Activity className="h-5 w-5 text-accent-400" />
-                  Sessão registrada!
+                  {t('save_success')}
                 </>
               ) : (
                 <>
                   <Save className="h-5 w-5" />
-                  {saving ? 'Salvando...' : 'Registrar sessão'}
+                  {saving ? t('saving') : t('save_session_button')}
                 </>
               )}
             </button>
@@ -243,11 +281,11 @@ export function SessionView({ exercise, onBack }: Props) {
             <div className="flex items-center gap-2 mb-5">
               <History className="h-5 w-5 text-gray-400" />
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-                Histórico
+                {t('history_title')}
               </h2>
               {sessions.length > 0 && (
                 <span className="ml-auto text-xs text-gray-400">
-                  {sessions.length} {sessions.length === 1 ? 'registro' : 'registros'}
+                  {tp('history_count', sessions.length)}
                 </span>
               )}
             </div>
@@ -262,19 +300,19 @@ export function SessionView({ exercise, onBack }: Props) {
               <div className="text-center py-10">
                 <Clock className="h-10 w-10 text-gray-300 dark:text-gray-700 mx-auto mb-3" />
                 <p className="text-sm text-gray-400 dark:text-gray-500">
-                  Nenhuma sessão registrada ainda.
+                  {t('no_sessions_yet')}
                 </p>
               </div>
             ) : (
               <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
                 {sessions.map((session, idx) => {
                   const date = new Date(session.created_at);
-                  const dateStr = date.toLocaleDateString('pt-BR', {
+                  const dateStr = date.toLocaleDateString(dateLocale(), {
                     day: '2-digit',
                     month: 'short',
                     year: date.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
                   });
-                  const timeStr = date.toLocaleTimeString('pt-BR', {
+                  const timeStr = date.toLocaleTimeString(dateLocale(), {
                     hour: '2-digit',
                     minute: '2-digit',
                   });
@@ -289,7 +327,7 @@ export function SessionView({ exercise, onBack }: Props) {
                       <button
                         onClick={() => handleDeleteSession(session.id)}
                         className="absolute top-2 right-2 h-7 w-7 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all"
-                        aria-label="Excluir sessão"
+                        aria-label={t('aria_delete_session')}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -301,7 +339,7 @@ export function SessionView({ exercise, onBack }: Props) {
                             : 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-300'
                         }`}>
                           <span className="text-lg font-bold leading-none">{session.bpm}</span>
-                          <span className="text-[10px] leading-none mt-0.5">BPM</span>
+                          <span className="text-[10px] leading-none mt-0.5">{t('bpm_unit')}</span>
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2">
@@ -310,20 +348,20 @@ export function SessionView({ exercise, onBack }: Props) {
                             </span>
                             {isRecord && (
                               <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-accent-100 dark:bg-accent-900/30 text-accent-600 dark:text-accent-400">
-                                RECORDE
+                                {t('record_badge')}
                               </span>
                             )}
                           </div>
                           <div className="flex items-center gap-1.5 mt-1">
-                            <div className="flex gap-0.5">
-                              {Array.from({ length: 10 }).map((_, i) => (
+                            <div className="flex gap-1">
+                              {[1, 2, 3].map((tier) => (
                                 <div
-                                  key={i}
-                                  className={`h-1.5 w-2 rounded-full ${
-                                    i < session.tension_level
-                                      ? session.tension_level <= 3
+                                  key={tier}
+                                  className={`h-1.5 w-2.5 rounded-full ${
+                                    tier <= tensionTier(session.tension_level)
+                                      ? tensionTier(session.tension_level) === 1
                                         ? 'bg-accent-500'
-                                        : session.tension_level <= 6
+                                        : tensionTier(session.tension_level) === 2
                                         ? 'bg-amber-500'
                                         : 'bg-brand-500'
                                       : 'bg-gray-200 dark:bg-gray-700'
@@ -332,7 +370,7 @@ export function SessionView({ exercise, onBack }: Props) {
                               ))}
                             </div>
                             <span className={`text-xs font-medium ${tensionColor(session.tension_level)}`}>
-                              {session.tension_level}/10
+                              {tensionLabel(session.tension_level)}
                             </span>
                           </div>
                         </div>
@@ -352,30 +390,34 @@ export function SessionView({ exercise, onBack }: Props) {
         </div>
       </div>
 
-      {/* Tension slider styling */}
+      {/* BPM slider styling */}
       <style>{`
-        .tension-slider::-webkit-slider-thumb {
+        .bpm-slider::-webkit-slider-thumb {
           appearance: none;
-          width: 22px;
-          height: 22px;
+          width: 26px;
+          height: 26px;
           border-radius: 50%;
           background: white;
           border: 3px solid #f04438;
-          cursor: pointer;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+          cursor: grab;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.18);
           transition: transform 0.15s;
         }
-        .tension-slider::-webkit-slider-thumb:hover {
-          transform: scale(1.15);
+        .bpm-slider::-webkit-slider-thumb:hover {
+          transform: scale(1.1);
         }
-        .tension-slider::-moz-range-thumb {
-          width: 22px;
-          height: 22px;
+        .bpm-slider::-webkit-slider-thumb:active {
+          cursor: grabbing;
+          transform: scale(1.2);
+        }
+        .bpm-slider::-moz-range-thumb {
+          width: 26px;
+          height: 26px;
           border-radius: 50%;
           background: white;
           border: 3px solid #f04438;
-          cursor: pointer;
-          box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+          cursor: grab;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.18);
         }
       `}</style>
     </div>

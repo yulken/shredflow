@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Plus, Music2, Pencil, Trash2, X, Activity, Gauge, ArrowLeft, Clock } from 'lucide-react';
 import { supabase, type Exercise } from '@/lib/supabase';
+import { t, tp, categories, CATEGORY_CANONICAL, categoryLabel } from '@/lib/i18n';
 
 type Props = {
   onSelectExercise: (exercise: Exercise) => void;
@@ -44,12 +45,12 @@ export function ExerciseList({ onSelectExercise }: Props) {
   }, []);
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Tem certeza que deseja excluir este exercício? Todo o histórico de sessões será removido.')) {
+    if (!confirm(t('confirm_delete_exercise'))) {
       return;
     }
     const { error } = await supabase.from('exercises').delete().eq('id', id);
     if (error) {
-      alert('Erro ao excluir exercício.');
+      alert(t('error_delete_exercise'));
       return;
     }
     fetchExercises();
@@ -60,10 +61,10 @@ export function ExerciseList({ onSelectExercise }: Props) {
       <div className="flex items-center justify-between mb-8">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
-            Exercícios
+            {t('exercises_title')}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
-            Gerencie sua lista de exercícios de guitarra
+            {t('exercises_subtitle')}
           </p>
         </div>
         <button
@@ -71,7 +72,7 @@ export function ExerciseList({ onSelectExercise }: Props) {
           className="flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium shadow-lg shadow-brand-600/20 transition-all hover:scale-105 active:scale-95"
         >
           <Plus className="h-5 w-5" />
-          Novo exercício
+          {t('new_exercise_button')}
         </button>
       </div>
 
@@ -89,17 +90,17 @@ export function ExerciseList({ onSelectExercise }: Props) {
             <Music2 className="h-8 w-8" />
           </div>
           <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">
-            Nenhum exercício ainda
+            {t('no_exercises_title')}
           </h3>
           <p className="text-gray-500 dark:text-gray-400 mb-6">
-            Crie seu primeiro exercício para começar a registrar treinos.
+            {t('no_exercises_text')}
           </p>
           <button
             onClick={() => { setEditingExercise(null); setShowForm(true); }}
             className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium transition-colors"
           >
             <Plus className="h-5 w-5" />
-            Adicionar exercício
+            {t('add_exercise_button')}
           </button>
         </div>
       ) : (
@@ -119,14 +120,14 @@ export function ExerciseList({ onSelectExercise }: Props) {
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditingExercise(exercise); setShowForm(true); }}
                     className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
-                    aria-label="Editar"
+                    aria-label={t('tooltip_edit')}
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDelete(exercise.id); }}
                     className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                    aria-label="Excluir"
+                    aria-label={t('tooltip_delete')}
                   >
                     <Trash2 className="h-4 w-4" />
                   </button>
@@ -145,18 +146,18 @@ export function ExerciseList({ onSelectExercise }: Props) {
               <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                 {exercise.category && (
                   <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-                    {exercise.category}
+                    {categoryLabel(exercise.category)}
                   </span>
                 )}
                 {exercise.target_bpm && (
                   <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                     <Gauge className="h-3.5 w-3.5" />
-                    Meta: {exercise.target_bpm} BPM
+                    {t('goal_line', { bpm: exercise.target_bpm })}
                   </span>
                 )}
                 <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 ml-auto">
                   <Activity className="h-3.5 w-3.5" />
-                  {sessionCounts[exercise.id] || 0} sessões
+                  {tp('sessions_count', sessionCounts[exercise.id] || 0)}
                 </span>
               </div>
             </div>
@@ -191,12 +192,11 @@ function ExerciseForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
-  const categories = ['Técnica', 'Velocidade', 'Aquecimento', 'Acordes', 'Escalas', 'Improvisação', 'Ritmo', 'Estudo'];
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
-      setError('O título é obrigatório.');
+      setError(t('error_title_required'));
       return;
     }
     setSaving(true);
@@ -211,10 +211,10 @@ function ExerciseForm({
 
     if (exercise) {
       const { error } = await supabase.from('exercises').update(payload).eq('id', exercise.id);
-      if (error) setError('Erro ao atualizar exercício.');
+      if (error) setError(t('error_update_exercise'));
     } else {
       const { error } = await supabase.from('exercises').insert(payload);
-      if (error) setError('Erro ao criar exercício.');
+      if (error) setError(t('error_create_exercise'));
     }
 
     setSaving(false);
@@ -230,11 +230,12 @@ function ExerciseForm({
       <div className="relative w-full sm:max-w-lg card rounded-t-3xl sm:rounded-3xl p-6 max-h-[90vh] overflow-y-auto animate-slide-up sm:animate-scale-in">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
-            {exercise ? 'Editar exercício' : 'Novo exercício'}
+            {exercise ? t('form_title_edit') : t('form_title_new')}
           </h2>
           <button
             onClick={onClose}
             className="h-9 w-9 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            aria-label={t('aria_close_form')}
           >
             <X className="h-5 w-5" />
           </button>
@@ -243,13 +244,13 @@ function ExerciseForm({
         <form onSubmit={handleSubmit} className="space-y-5">
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Título *
+              {t('field_title')}
             </label>
             <input
               type="text"
               value={title}
               onChange={(e) => setTitle(e.target.value)}
-              placeholder="Ex: Cromática alternada"
+              placeholder={t('placeholder_title')}
               autoFocus
               className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
             />
@@ -257,12 +258,12 @@ function ExerciseForm({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Descrição
+              {t('field_description')}
             </label>
             <textarea
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              placeholder="Detalhes sobre o exercício..."
+              placeholder={t('placeholder_description')}
               rows={3}
               className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all resize-none"
             />
@@ -270,35 +271,38 @@ function ExerciseForm({
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Categoria
+              {t('field_category')}
             </label>
             <div className="flex flex-wrap gap-2">
-              {categories.map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setCategory(category === cat ? '' : cat)}
-                  className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
-                    category === cat
-                      ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
-                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
+              {categories().map((label, i) => {
+                const canonical = CATEGORY_CANONICAL[i];
+                return (
+                  <button
+                    key={label}
+                    type="button"
+                    onClick={() => setCategory(category === canonical ? '' : canonical)}
+                    className={`px-3.5 py-2 rounded-lg text-sm font-medium transition-all ${
+                      category === canonical
+                        ? 'bg-brand-600 text-white shadow-md shadow-brand-600/20'
+                        : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                    }`}
+                  >
+                    {label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              BPM alvo
+              {t('field_bpm_target')}
             </label>
             <input
               type="number"
               value={targetBpm}
               onChange={(e) => setTargetBpm(e.target.value)}
-              placeholder="Ex: 120"
+              placeholder={t('placeholder_bpm')}
               min={1}
               max={400}
               className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
@@ -315,14 +319,14 @@ function ExerciseForm({
               onClick={onClose}
               className="flex-1 px-5 py-3 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
             >
-              Cancelar
+              {t('cancel_button')}
             </button>
             <button
               type="submit"
               disabled={saving}
               className="flex-1 px-5 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium shadow-lg shadow-brand-600/20 transition-all disabled:opacity-50"
             >
-              {saving ? 'Salvando...' : exercise ? 'Salvar' : 'Criar'}
+              {saving ? t('saving') : exercise ? t('save_button') : t('create_button')}
             </button>
           </div>
         </form>

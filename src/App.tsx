@@ -1,13 +1,17 @@
 import { useState } from 'react';
 import { Guitar } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
+import { useLanguage } from '@/hooks/useLanguage';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { LanguageToggle } from '@/components/LanguageToggle';
+import { t } from '@/lib/i18n';
 import { ExerciseList } from '@/components/ExerciseList';
 import { SessionView } from '@/components/SessionView';
 import type { Exercise } from '@/lib/supabase';
 
 export default function App() {
   const { theme, toggleTheme } = useTheme();
+  const { lang, toggleLanguage } = useLanguage();
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
   return (
@@ -23,10 +27,11 @@ export default function App() {
               <Guitar className="h-5 w-5" />
             </div>
             <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
-              GuitarTrain
+              {t('app_brand')}
             </span>
           </button>
           <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <LanguageToggle lang={lang} onToggle={toggleLanguage} />
         </div>
       </header>
 
@@ -45,7 +50,7 @@ export default function App() {
       {/* Footer */}
       <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
         <p className="text-center text-xs text-gray-400 dark:text-gray-600">
-          GuitarTrain — Controle de treino de guitarra
+          {t('footer_tagline')}
         </p>
       </footer>
     </div>
