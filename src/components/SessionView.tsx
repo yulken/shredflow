@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { ArrowLeft, Save, Gauge, History, TrendingUp, Activity, Trash2, Clock } from 'lucide-react';
 import { supabase, type Exercise, type PracticeSession } from '@/lib/supabase';
 import { t, tp, dateLocale, categoryLabel } from '@/lib/i18n';
+import { tensionTier, tensionLabel, tensionColor } from '@/lib/tension';
+import { bpmStep } from '@/lib/bpm';
 
 type Props = {
   exercise: Exercise;
@@ -68,26 +70,6 @@ export function SessionView({ exercise, onBack }: Props) {
     ? Math.round(sessions.reduce((sum, s) => sum + s.bpm, 0) / sessions.length)
     : null;
   const lastBpm = sessions.length > 0 ? sessions[0].bpm : null;
-
-  const tensionTier = (level: number) => {
-    if (level <= 3) return 1;
-    if (level <= 6) return 2;
-    return 3;
-  };
-
-  const tensionLabel = (level: number) => {
-    const tier = tensionTier(level);
-    if (tier === 1) return t('tension_low');
-    if (tier === 2) return t('tension_medium');
-    return t('tension_high');
-  };
-
-  const tensionColor = (level: number) => {
-    const tier = tensionTier(level);
-    if (tier === 1) return 'text-accent-500';
-    if (tier === 2) return 'text-amber-500';
-    return 'text-brand-500';
-  };
 
   return (
     <div className="animate-fade-in">
@@ -183,7 +165,7 @@ export function SessionView({ exercise, onBack }: Props) {
               </label>
               <div className="flex items-center gap-3">
                 <button
-                  onClick={() => setBpm((b) => Math.max(1, b - 1))}
+                  onClick={() => setBpm((b) => bpmStep(b, -1))}
                   className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-xl font-bold transition-colors active:scale-95"
                   aria-label={t('bpm_minus_one')}
                 >
@@ -196,7 +178,7 @@ export function SessionView({ exercise, onBack }: Props) {
                   className="flex-1 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
                 />
                 <button
-                  onClick={() => setBpm((b) => b + 1)}
+                  onClick={() => setBpm((b) => bpmStep(b, 1))}
                   className="h-12 w-12 rounded-xl bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-xl font-bold transition-colors active:scale-95"
                   aria-label={t('bpm_plus_one')}
                 >
@@ -205,7 +187,7 @@ export function SessionView({ exercise, onBack }: Props) {
               </div>
               <div className="flex items-center gap-3 mt-4">
                 <button
-                  onClick={() => setBpm((b) => Math.max(1, b - 5))}
+                  onClick={() => setBpm((b) => bpmStep(b, -5))}
                   className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-lg font-bold transition-colors active:scale-95"
                   aria-label={t('bpm_minus_five')}
                 >
@@ -223,7 +205,7 @@ export function SessionView({ exercise, onBack }: Props) {
                   }}
                 />
                 <button
-                  onClick={() => setBpm((b) => b + 5)}
+                  onClick={() => setBpm((b) => bpmStep(b, 5))}
                   className="h-10 w-10 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 text-lg font-bold transition-colors active:scale-95"
                   aria-label={t('bpm_plus_five')}
                 >

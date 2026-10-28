@@ -45,6 +45,12 @@ export function setLang(code: string) {
   if (templates[code]) current = code;
 }
 
+// The toggle walks LANGUAGES in order and wraps, so the cycle is en -> pt -> es -> en.
+export function nextLanguage(code: string): string {
+  const at = LANGUAGES.indexOf(code);
+  return LANGUAGES[(at + 1) % LANGUAGES.length];
+}
+
 export function t(key: string, params: Record<string, unknown> = {}): string {
   let raw = templates[current].strings[key];
   if (raw === undefined) {

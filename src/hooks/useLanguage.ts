@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { getLang, setLang, LANGUAGES, t } from '@/lib/i18n';
+import { getLang, setLang, nextLanguage, t } from '@/lib/i18n';
 
 export function useLanguage() {
   const [lang, setLangState] = useState<string>(getLang());
@@ -16,7 +16,7 @@ export function useLanguage() {
   }, [lang]);
 
   const toggleLanguage = () => {
-    const next = LANGUAGES[(LANGUAGES.indexOf(lang) + 1) % LANGUAGES.length];
+    const next = nextLanguage(lang);
     setLang(next);
     setLangState(next);
   };
