@@ -1,22 +1,24 @@
 import { describe, expect, test } from 'vitest';
+import { readFile } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
 import { getLang, setLang, t, tp, nextLanguage, CATEGORY_CANONICAL, categories, categoryLabel, categoryValue, dateLocale, type Locale } from '@/lib/i18n';
 import { EN } from '@/lib/locales/en';
 import { ES } from '@/lib/locales/es';
 import { PT } from '@/lib/locales/pt';
 
-// Scope: the pure surface of the engine - `t()` and, in passes since ADR-0009,
-// `tp()`, `nextLanguage()`, the `getLang`/`setLang` pair, `categories()`,
-// `dateLocale()` and the category label/value pair.
+// Scope: the pure surface of the engine - `t()` plus `tp()`, `nextLanguage()`,
+// the `getLang`/`setLang` pair, `categories()`, `dateLocale()` and the
+// category label/value pair.
 //
 // Every unit under test here is pure: value in, value out, no DOM, no browser
 // state. `t()` is locale + key + params in, string out; the later additions
-// (ADR-0009's `nextLanguage`, the category pair) are the same shape.
+// (`nextLanguage`, the category pair) are the same shape.
 // Translated wording is asserted only against `en.ts`, the one reviewed
-// reference dictionary: `pt`/`es` are provisional content (ADR-0008 rule 3), so
-// the checks there are structural - which dictionary won, which key was read,
-// whether a placeholder survived - never "is this good Spanish/Portuguese"
-// (ADR-0009). Side-effecting parts of the engine (localStorage, window
-// location, navigator.language, `document.*`) stay out of scope: they are
+// reference dictionary: `pt`/`es` are provisional content, so the checks
+// there are structural - which dictionary won, which key was read,
+// whether a placeholder survived - never "is this good Spanish/Portuguese".
+// Side-effecting parts of the engine (localStorage, window location,
+// navigator.language, `document.*`) stay out of scope: they are
 // browser state, not a return value.
 
 describe('t()', () => {
@@ -79,9 +81,31 @@ describe('t()', () => {
   test('a key missing everywhere falls through to the key itself', () => {
     expect(t('also_not_a_real_key', { value: 7 })).toBe('also_not_a_real_key');
   });
+
+  // The fallback chain has two legs and an absent key exercises both: the
+  // active language misses, the reference misses, the key itself survives. The
+  // warning is console text that is never translated, so its wording is a
+  // claim about `i18n.ts` - which is what lets the missing name here be
+  // anything that is not in a dictionary.
+  test('a miss in the active language and in the reference warns and returns the key itself', () => {
+    const previousLang = getLang();
+    const originalWarn = console.warn;
+    const warnings: string[] = [];
+    console.warn = (...args) => {
+      warnings.push(String(args[0]));
+    };
+    try {
+      setLang('es');
+      expect(t('also_not_a_real_key', { value: 7 })).toBe('also_not_a_real_key');
+      expect(warnings).toStrictEqual([`i18n: key 'also_not_a_real_key' missing in 'es', falling back to 'en'`]);
+    } finally {
+      console.warn = originalWarn;
+      setLang(previousLang);
+    }
+  });
 });
 
-// ADR-0009 rule 4: the plural rule is scoped to the two families the app
+// The plural rule is scoped to the two families the app
 // actually pluralizes - the two `tp(` call sites are `tp('sessions_count', ...)`
 // (ExerciseList.tsx) and `tp('history_count', ...)` (SessionView.tsx). A
 // general "_one always has an _other" assertion would fail today: `bpm_minus_one`
@@ -107,10 +131,10 @@ describe('tp()', () => {
   });
 
   test('in PT and ES, tp is asserted as the _one/_other key pick plus t() substitution', () => {
-    // Structural (ADR-0009): the key that was appended is pinned against what
-    // t() answers for that same key in the same locale; no Spanish or
-    // Portuguese word is quoted, so any rewrite of the provisional pt/es content
-    // that ADR-0008 rule 3 promises moves nothing here.
+    // Structural: the key that was appended is pinned against what t()
+    // answers for that same key in the same locale; no Spanish or
+    // Portuguese word is quoted, so any rewrite of the provisional pt/es
+    // content moves nothing here.
     for (const code of ['pt', 'es']) {
       setLang(code);
       expect(tp('sessions_count', 1)).toBe(t('sessions_count_one', { count: 1 }));
@@ -126,13 +150,14 @@ describe('tp()', () => {
   });
 });
 
-// ADR-0007's cycle is `en -> pt -> es -> en`, walking LANGUAGES' order; the
-// hook that consumed it moved out at ADR-0009, so the cycle itself is now the
-// unit. nextLanguage does not move the active language: setLang does, and the
-// hook keeps feeding both setLang(next) and setLangState(next) from one value.
+// The language cycle is `en -> pt -> es -> en`, walking LANGUAGES' order; the
+// hook that consumed it lives in the view layer, so the cycle itself is the
+// unit under test here. nextLanguage does not move the active language: setLang
+// does, and the hook keeps feeding both setLang(next) and setLangState(next)
+// from one value.
 
 describe('nextLanguage()', () => {
-  test('the three codes cycle in LANGUAGES order, as ADR-0007 wrote', () => {
+  test('the three codes cycle in LANGUAGES order', () => {
     expect(nextLanguage('en')).toBe('pt');
     expect(nextLanguage('pt')).toBe('es');
     expect(nextLanguage('es')).toBe('en');
@@ -146,7 +171,7 @@ describe('nextLanguage()', () => {
   });
 });
 
-// The localStorage/window/navigator detection chain (ADR-0007) stays out of
+// The localStorage/window/navigator detection chain stays out of
 // scope - it is browser state read once at module load. What is assertable
 // headlessly is the switch itself: valid code moves, invalid code is ignored.
 
@@ -166,11 +191,11 @@ describe('getLang()/setLang()', () => {
   });
 });
 
-// The category machinery is ADR-0006: the DB stores canonical (Portuguese)
+// The category machinery: the DB stores canonical (Portuguese)
 // values, display labels are each locale's own list matched by index. For PT/
 // ES the assertions index into the imported template - "which dictionary won,
 // which index answered" - and never quote the list's words, which keeps them
-// green over whatever wording ADR-0008's provisional `es.ts` carries, and over any
+// green over whatever wording the provisional `es.ts` carries, and over any
 // later rewrite of it. EN, the authored reference, gets the wording itself.
 
 describe('categories(), categoryLabel(), categoryValue()', () => {
@@ -193,7 +218,7 @@ describe('categories(), categoryLabel(), categoryValue()', () => {
   });
 
   test('matching is accent-folded, so the stored canonical survives either spelling', () => {
-    // The fold on both sides is why ADR-0006 says localized UIs never split
+    // The fold on both sides is why localized UIs never split
     // existing rows: a hand-entered spelling still lands on the canonical's
     // index. 'Tecnica' is what folding 'Técnica' produces (the word has no h),
     // and 'Improvisacaon' folds out of the stored 'Improvisa' + c-cedilla +

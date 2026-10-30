@@ -1,9 +1,9 @@
 import { t } from './i18n';
 
-// The DB stores `tension_level` as an integer 1-10 (see ADR-0005); the three named
+// The DB stores `tension_level` as an integer 1-10; the three named
 // levels and the tier bar are derived from that number at read time, never stored.
-// These live in `src/lib` rather than in `SessionView` so they can be exercised
-// without a DOM (ADR-0009).
+// These live in `src/lib` rather than in `SessionView` so they can be
+// exercised without a DOM.
 
 export function tensionTier(level: number): number {
   if (level <= 3) return 1;

@@ -2,18 +2,18 @@ import { describe, expect, test } from 'vitest';
 import { tensionColor, tensionLabel, tensionTier } from '@/lib/tension';
 import { setLang, t } from '@/lib/i18n';
 
-// Scope: the tier machinery ADR-0005 defined and ADR-0009 moved to `src/lib`.
-// Tier bounds are asserted as numbers (ADR-0005's `<= 3` and `<= 6`), the
-// colors as literals (Tailwind class names are UI chrome: ADR-0006 keeps them
-// out of the dictionaries, so they are the same in every locale and safe to
-// pin). The label is asserted as key selection - in EN against
-// `en.ts`, the reviewed reference dictionary, and in PT/ES only against what
-// `t()` itself answers for the same key (ADR-0009's rule: a test may state
+// Scope: the tier machinery, moved out of the component into `src/lib`.
+// Tier bounds are asserted as numbers (`<= 3` and `<= 6`), the colors as
+// literals (Tailwind class names are UI chrome: they stay out of the
+// dictionaries, so they are the same in every locale and safe to pin). The
+// label is asserted as key selection - in EN against `en.ts`, the reviewed
+// reference dictionary, and in PT/ES only against what `t()` itself answers
+// for the same key (the rule this test file follows: a test may state
 // wording against EN, structure against the other two). The `[1, 5, 10]`
-// selector and the tier-bar markup stay in the component per ADR-0009.
+// selector and the tier-bar markup stay in the component.
 
 describe('tensionTier()', () => {
-  test('ADR-0005 boundaries: level <= 3 is tier 1, level <= 6 is tier 2', () => {
+  test('tier boundaries: level <= 3 is tier 1, level <= 6 is tier 2', () => {
     expect(tensionTier(1)).toBe(1);
     expect(tensionTier(2)).toBe(1);
     expect(tensionTier(3)).toBe(1);
@@ -39,7 +39,7 @@ describe('tensionTier()', () => {
 });
 
 describe('tensionColor()', () => {
-  test('one Tailwind class per tier, in ADR-0005 recorded order', () => {
+  test('one Tailwind class per tier, in tier order', () => {
     expect(tensionColor(1)).toBe('text-accent-500');
     expect(tensionColor(6)).toBe('text-amber-500');
     expect(tensionColor(10)).toBe('text-brand-500');
@@ -54,8 +54,8 @@ describe('tensionColor()', () => {
 
 describe('tensionLabel()', () => {
   test('in EN the three tiers read the three dictionary keys, wording asserted', () => {
-    // EN is the reviewed reference dictionary, so its wording is assertable
-    // (ADR-0009 rule 1); `en.ts` says Low/Medium/High for the tier keys.
+    // EN is the reviewed reference dictionary, so its wording is assertable;
+    // `en.ts` says Low/Medium/High for the tier keys.
     setLang('en');
     expect(tensionLabel(2)).toBe('Low');
     expect(tensionLabel(5)).toBe('Medium');
@@ -65,8 +65,8 @@ describe('tensionLabel()', () => {
   test('in PT and ES the label is asserted as key selection, never as Spanish or Portuguese', () => {
     // tensionLabel(1) reads the same dictionary entry as t('tension_low'):
     // which key was picked is pinned, what the word is, nothing. Both sides
-    // move together across any rewrite of the provisional pt.ts/es.ts content that
-    // ADR-0008 rule 3 promises; no word from either dictionary is quoted.
+    // move together across any rewrite of the provisional pt.ts/es.ts content;
+    // no word from either dictionary is quoted.
     for (const code of ['pt', 'es']) {
       setLang(code);
       expect(tensionLabel(1)).toBe(t('tension_low'));
