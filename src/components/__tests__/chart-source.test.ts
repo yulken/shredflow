@@ -6,11 +6,14 @@ import { fileURLToPath } from 'node:url';
 // source the way `bpm.test.ts` reads the migration. None of them is testable over
 // the components themselves (no DOM in this suite): a color that shifts when a
 // series is hidden is a visual regression, a visibility control that navigates
-// instead of writing is only visible by clicking, and an axis that densifies into
-// daily gridlines or prints a clock time is only visible on screen. The pure date
-// rule lives in `src/lib/chart.ts` and is tested directly in `src/lib/__tests__/chart.test.ts`.
+// instead of writing is only visible by clicking, a period control that filtered
+// the stored records instead of the points would only show in the numbers, and an
+// axis that densifies into daily gridlines or prints a clock time is only visible
+// on screen. The pure rules live in `src/lib/chart.ts` and `src/lib/period.ts`,
+// tested directly in `src/lib/__tests__/chart.test.ts` and `period.test.ts`.
 const chart = readFileSync(fileURLToPath(new URL('../ProgressChart.tsx', import.meta.url)), 'utf8');
 const dashboard = readFileSync(fileURLToPath(new URL('../Dashboard.tsx', import.meta.url)), 'utf8');
+const hook = readFileSync(fileURLToPath(new URL('../../hooks/useChartPeriod.ts', import.meta.url)), 'utf8');
 
 describe('the palette position survives a visibility change', () => {
   test('color comes from the whole exercise list, not the visible subset', () => {
@@ -44,18 +47,28 @@ describe('the legend sits beside the plot', () => {
   });
 });
 
-describe('the X axis marks weekly subdivisions only', () => {
-  test('the tick unit is fixed to week', () => {
-    // Chart.js draws one grid line per tick, so a fixed unit is what stops the
-    // axis densifying ticks into days/hours. `stepSize: 1` = every week.
-    expect(chart).toMatch(/time: \{ unit: 'week', stepSize: 1, tooltipFormat: 'PP' \}/);
+describe('the X axis marks readable subdivisions for the window drawn', () => {
+  test('the tick unit comes from the points, not from a constant', () => {
+    // Chart.js draws one grid line per tick, so the unit is what stops the axis
+    // densifying into days/hours. A hardcoded 'week' would put 52 lines on a year.
+    expect(chart).toMatch(/unit: tickUnit\(drawn\)/);
+    expect(chart).toMatch(/time: \{ unit, stepSize: 1, tooltipFormat: 'PP' \}/);
     // Deliberately no `isoWeekday`: the adapter's own `week` start
     // (`weekStartsOn: 0`) is the alignment that was chosen. Both negatives are
-    // scoped to the `time` object - the prose in the component names these options
-    // to say they are absent, so a plain `not.toContain` would hit the comment.
+    // scoped to the `time` object - the prose around it names these options to
+    // say they are absent, so a plain `not.toContain` would hit the comment.
     expect(chart).not.toMatch(/time: \{[^}]*isoWeekday/);
     expect(chart).not.toMatch(/time: \{[^}]*displayFormats/);
     expect(chart).toMatch(/callback: \(v\) => tickDateLabel\(Number\(v\), dateLocale\(\), withYear\)/);
+  });
+
+  test('the axis shape follows the filtered points', () => {
+    // `drawn` is what the datasets hold after both filters, so hiding a series or
+    // narrowing the period decides the unit and the year together.
+    expect(chart).toMatch(/const inPeriod = filterSessions\(sessions, period, now\)/);
+    expect(chart).toMatch(/const drawn = series\.flat\(\)/);
+    expect(chart).toContain('withYear: spansMultipleYears(drawn)');
+    expect(chart).toContain('unit: tickUnit(drawn)');
   });
 
   test('no label carries a clock time', () => {
@@ -69,6 +82,51 @@ describe('the X axis marks weekly subdivisions only', () => {
 
   test('the tooltip title uses the same helper as the ticks', () => {
     expect(chart).toContain('tooltipDateLabel(x, dateLocale(), withYear)');
+  });
+});
+
+describe('the period control filters points, not records', () => {
+  test('the filter is applied to the sessions before the series are built', () => {
+    expect(chart).toMatch(/const inPeriod = filterSessions\(sessions, period, now\)/);
+    // The window is anchored once per recomputation, and `period` is a dependency:
+    // a control click has to rebuild the points, not be read at draw time only.
+    expect(chart).toMatch(/const now = new Date\(\)/);
+    expect(chart).toMatch(/\}, \[exercises, sessions, period\]/);
+  });
+
+  test('an empty window says so, separately from having nothing logged', () => {
+    // Otherwise "no sessions in the last month" reads as "no sessions at all".
+    expect(chart).toContain("t(hasAnySession ? 'chart_empty_period' : 'chart_empty')");
+  });
+
+  test('the catalog keeps the stored records', () => {
+    // Max/Last come from the trigger, so the period must not reach them: the
+    // table cells read the columns, and nothing filters the fetch by date.
+    expect(dashboard).toContain('{exercise.max_bpm ??');
+    expect(dashboard).toContain('{exercise.last_bpm ??');
+    expect(dashboard).not.toMatch(/\.gte\(|\.lt\(|\.range\(/);
+  });
+
+  test('the control is a group of four buttons, and writes nothing', () => {
+    expect(dashboard).toMatch(/role="group" aria-label=\{t\('chart_period_label'\)/);
+    expect(dashboard).toMatch(/PERIODS\.map\(\(p\) =>/);
+    expect(dashboard).toMatch(/aria-pressed=\{period === p\}/);
+    expect(dashboard).toMatch(/onClick=\{\(\) => setPeriod\(p\)\}/);
+    expect(dashboard).toMatch(/period=\{period\}/);
+    // The only write the dashboard makes is the visibility flag; a period click
+    // must not become a database write.
+    expect(dashboard.match(/supabase\.from\([^)]*\)\.update/g)?.length).toBe(1);
+  });
+
+  test('the window is persisted by the hook, not by the screen', () => {
+    // Same shape as the language: read once at mount, validated, written back. The
+    // screen's prose names `localStorage` to say it does not touch it, so the
+    // negative is scoped to a call rather than the word.
+    expect(dashboard).not.toMatch(/localStorage\./);
+    expect(hook).toContain('localStorage.getItem(PERIOD_STORAGE_KEY)');
+    expect(hook).toContain('localStorage.setItem(PERIOD_STORAGE_KEY, period)');
+    expect(hook).toContain('if (isPeriod(stored)) return stored;');
+    expect(hook).toContain('return DEFAULT_PERIOD;');
   });
 });
 

@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { BarChart3, Music2, Eye, EyeOff } from 'lucide-react';
 import { supabase, type Exercise, type PracticeSession } from '@/lib/supabase';
 import { t } from '@/lib/i18n';
+import { PERIODS, PERIOD_LABEL_KEYS } from '@/lib/period';
+import { useChartPeriod } from '@/hooks/useChartPeriod';
 import { ProgressChart } from '@/components/ProgressChart';
 
 type Props = {
@@ -11,6 +13,11 @@ type Props = {
 // Standalone dashboard screen (D4): catalog table + Real-BPM chart; rows drill
 // down into the exercise's session view.
 export function Dashboard({ onSelectExercise }: Props) {
+  // The period is a chart-only filter: it decides which points are plotted, not
+  // what the catalog reports (Max/Last are the trigger's stored records). It is
+  // persisted in `localStorage` like the language is, so the window a user picked
+  // survives a reload.
+  const { period, setPeriod } = useChartPeriod();
   const [exercises, setExercises] = useState<Exercise[]>([]);
   const [sessions, setSessions] = useState<PracticeSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,16 +66,37 @@ export function Dashboard({ onSelectExercise }: Props) {
       </div>
 
       <div className="card p-6">
-        <div className="flex items-center gap-2 mb-5">
-          <BarChart3 className="h-5 w-5 text-gray-400" />
-          <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
-            {t('chart_title')}
-          </h2>
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-gray-400" />
+            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
+              {t('chart_title')}
+            </h2>
+          </div>
+          {/* The four windows are the whole set; `period_all` is the default, so
+              the landing view stays the entire log. */}
+          <div role="group" aria-label={t('chart_period_label')} className="flex flex-wrap items-center gap-1">
+            {PERIODS.map((p) => (
+              <button
+                key={p}
+                type="button"
+                onClick={() => setPeriod(p)}
+                aria-pressed={period === p}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  period === p
+                    ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                {t(PERIOD_LABEL_KEYS[p])}
+              </button>
+            ))}
+          </div>
         </div>
         {loading ? (
           <div className="h-[360px] rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
         ) : (
-          <ProgressChart exercises={exercises} sessions={sessions} />
+          <ProgressChart exercises={exercises} sessions={sessions} period={period} />
         )}
       </div>
 

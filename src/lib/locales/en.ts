@@ -96,5 +96,11 @@ export const EN = {
     chart_title: 'Real BPM over time',
     chart_y_axis: 'Real BPM',
     chart_empty: 'No logged sessions yet for exercises shown on the chart.',
+    chart_period_label: 'Period',
+    period_month: 'Last month',
+    period_quarter: 'Last 3 months',
+    period_year: 'Last year',
+    period_all: 'All data',
+    chart_empty_period: 'No sessions logged in this period.',
   },
 };

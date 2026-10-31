@@ -1,9 +1,10 @@
 # Shredlog — Implementation Plan (requirements reconciliation)
 
 Status: **ACTIVE** — Phases A · B · C · D done (2026-10-31), including the chart polish Caio asked for
-(lateral legend, weekly-only gridlines, date-only tooltips). Legacy log seeded; acceptance #1–#3
+(lateral legend, weekly-only gridlines, date-only tooltips) and the period control (month / quarter /
+year / all) on the Dashboard chart. Legacy log seeded; acceptance #1–#3
 verified at the schema/data level. One item left: the browser pass (chart vs spreadsheet, tab URL,
-visibility toggle) — needs Caio to click through it.
+visibility toggle, period buttons) — needs Caio to click through it.
 Spec reference: `requirements.md` · Repo: `shredlog` (Vite/React + Supabase)
 Related: a prior SessionView plan (`~/.opencode/plan/session-view-adjustments.md`) already resolved decision D1 — see §6.
 
@@ -98,6 +99,11 @@ trigger exactly (single formula, two implementations). Stepper kept as-is.
   - One series per exercise where `dashboard_visible = true`.
   - Fixed per-exercise color palette; legend lateral (right, top-aligned) beside the plot; tooltip
     shows the occurrence date (no clock time) / base BPM / clicks / tension.
+  - Period control (`1 month · 3 months · 1 year · all`) in the chart card header: a chart-only
+    filter over the points, persisted in `localStorage` (`chart_period`) like the language is.
+    `src/lib/period.ts` holds the windows (30/90/365 rolling days) and the tick unit derived from
+    the points drawn; `src/hooks/useChartPeriod.ts` holds the storage. Max/Last in the catalog stay
+    the trigger's stored records.
 - Mounted in a **standalone Dashboard screen** (per D4): `Dashboard.tsx` renders the catalog table
   (name, max/last BPM, visibility) + the chart; `App.tsx` gains a third top-level view (brand button
   routes to Dashboard; drill-down remains available from Dashboard back into exercises/sessions).
@@ -162,11 +168,14 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
 
 - `vitest` extended: `bpm.test.ts` (`realBpm`, plus the migration-text lockstep), pure helpers
   around supabase payloads, `locales.test.ts` for the new i18n keys, `src/lib/__tests__/chart.test.ts`
-  for the chart's date rule (day-only labels, conditional year, per-locale shapes), and
-  `src/components/__tests__/chart-source.test.ts` for the legend/axis wiring off the source.
+  for the chart's date rule (day-only labels, conditional year, per-locale shapes),
+  `src/lib/__tests__/period.test.ts` for the period windows (day counts, boundary inclusivity, the
+  tick unit derived from the drawn points), and `src/components/__tests__/chart-source.test.ts` for
+  the legend/axis/period wiring off the source.
 - Manual acceptance pass: add exercise (with tab URL + visibility) → log with clicks/tension →
   chart renders visibility-filtered Real-BPM series → Max/Last update with zero manual input. On the
-  chart: legend as a column on the right, one gridline per week, tooltips with the date only.
+  chart: legend as a column on the right, one grid line per week, tooltips with the date only, and the
+  four period buttons narrowing the points (Max/Last unchanged).
 - Amend `requirements.md` wording where D1/D2 deviate from the spec letter.
 - Build/dev check per existing convention: `npm run build` / `npm run dev` (PATH needs
   `~/.local/node/bin`).
@@ -285,8 +294,9 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
   true → 7 datasets, `PALETTE` is 8 colors so no collision), the tab URL write, and the
   visibility toggle redrawing the chart. The data behind all three is already verified above, and the
   chart's own shape is checked in the tests above; what only the browser can confirm is the legend
-  column on the right, the 7 Sunday grid lines over Sep 13 .. Oct 25, and a tooltip that reads a date
-  with no hour.
+  column on the right, the 7 Sunday grid lines over Sep 13 .. Oct 25, a tooltip that reads a date
+  with no hour, and the four period buttons narrowing the points (1 month keeps 37 of the 48 rows,
+  3 months / 1 year / all keep 48 today) without touching Max/Last in the table.
 - **2026-10-31 local schema verified over REST (read-only, GET only)** ✅ — target: local Supabase kong
   (`http://127.0.0.1:54321`, `supabase_kong_shredflow 54321->8000`), `apikey`/`Bearer` = the anon key in
   `.env`, `Prefer: count=exact`:
@@ -366,3 +376,46 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
   - `vitest` 85 passed; `tsc --noEmit`, `eslint` and `npm run build` clean. The dev server on 5173
     serves the new module: the legend block and tick callback are in the transformed output, and
     `displayFormats` / `'PP p'` are gone from it. Visual acceptance is still Caio's browser pass.
+- **2026-10-31 period control on the Dashboard chart** ✅ — Caio's ask: last month / last quarter /
+  last year / all data. Three decisions, taken at the recommended defaults: the windows roll from
+  the clock, not from the newest log (a 40-day idle stretch therefore leaves the month window empty
+  and the chart says `chart_empty_period` instead of sliding the window back to the last practice);
+  the default is `all`, so the landing view stays the whole log that acceptance criterion 2 compares
+  against the spreadsheet; and the filter is chart-only — `max_bpm`/`last_bpm` stay the trigger's
+  stored records (`requirements.md` §6), which is why nothing filters the fetch by date.
+  - `src/lib/period.ts` (new): `Period`, `PERIODS` shortest-first, `DEFAULT_PERIOD = 'all'`, rolling
+    day counts 30/90/365 (a quarter is a duration, not a calendar quarter), `periodCutoff` (`null`
+    for `all`), `withinPeriod` inclusive of its own start, `filterSessions` (keeps input order), and
+    `tickUnit(drawn)`: ≤90 days → `week`, ≤730 → `month`, above that → `quarter`. The unit stopped
+    being hardcoded `week`: 52 weekly grid lines over a year is exactly the axis pollution the chart
+    was cleaned up to avoid, and the seeded 42-day log keeps its Sunday lines.
+  - `src/hooks/useChartPeriod.ts` (new): mirrors `useLanguage` — read once at mount through
+    `isPeriod`, written back on change, both guarded by try/catch. A stale or hand-edited
+    `localStorage` value cannot reach the chart as a window the UI cannot name. Storage stays out of
+    the suite, like the language's chain.
+  - `ProgressChart.tsx`: takes `period`, filters once (`const inPeriod = filterSessions(sessions,
+    period, now)`) before the series are built, with `now` anchored inside the memo so a control
+    click rebuilds the points; `time: { unit, stepSize: 1, tooltipFormat: 'PP' }`; the empty state
+    tells "nothing logged at all" (`chart_empty`) apart from "nothing inside this window"
+    (`chart_empty_period`) through `hasAnySession`.
+  - `Dashboard.tsx`: segmented group in the chart card header (`role="group"` + `aria-label`, four
+    buttons with `aria-pressed`), wrapping under the title on narrow screens so it does not compete
+    with the lateral legend. It writes nothing to the database: the dashboard's only write is still
+    the visibility flag.
+  - Locales: 6 keys × 3 dictionaries (`chart_period_label`, `period_month`, `period_quarter`,
+    `period_year`, `period_all`, `chart_empty_period`), ASCII-only as the dictionaries are, parity
+    enforced by `locales.test.ts`.
+  - Tests: `src/lib/__tests__/period.test.ts` (13) pins the day counts against a fixed clock, cutoff
+    inclusivity (`2026-10-01T12:00Z` kept, `11:59:59Z` dropped), the idle-window counts over a
+    fixture spanning 2023..2026, order preservation, and the tick-unit thresholds 90/91/365/730/731
+    days — including that a month window keeps weekly lines over a multi-year log.
+    `chart-source.test.ts` gained the period claims (points filtered, records untouched, group markup,
+    persistence in the hook) and the axis assertion moved from `unit: 'week'` to
+    `unit: tickUnit(drawn)`. One assertion bug fixed on the way: `not.toContain('localStorage')` hit
+    the Dashboard prose that says it does not touch storage, so the negative is scoped to
+    `/localStorage\./`.
+  - `vitest` 104 passed; `tsc --noEmit`, `eslint` and `npm run build` clean. Counts over the seeded
+    DB (read-only `psql`, `now()` = 2026-10-31 18:59 UTC): 30 days → 37 rows, 90 → 48, 365 → 48,
+    all → 48; the month window keeps Oct 5 .. Oct 26, so it is the only button that changes the curve
+    today. Dev server serves the new modules (group markup, `filterSessions`, `tickUnit`, the 6
+    strings in `pt.ts`). Visual acceptance stays in Caio's browser pass.

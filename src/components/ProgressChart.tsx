@@ -15,6 +15,7 @@ import { t, dateLocale } from '@/lib/i18n';
 import { tensionLabel } from '@/lib/tension';
 import { realBpm } from '@/lib/bpm';
 import { spansMultipleYears, tickDateLabel, tooltipDateLabel } from '@/lib/chart';
+import { filterSessions, tickUnit, type Period } from '@/lib/period';
 import type { Exercise, PracticeSession } from '@/lib/supabase';
 
 // Time scale needs the date-fns adapter registered above; LinearScale covers
@@ -38,12 +39,19 @@ const PALETTE = [
 type Props = {
   exercises: Exercise[];
   sessions: PracticeSession[];
+  period: Period;
 };
 
-export function ProgressChart({ exercises, sessions }: Props) {
+export function ProgressChart({ exercises, sessions, period }: Props) {
   // One series per exercise with dashboard_visible = true; Y is Real BPM
-  // (bpm x clicks_per_beat), matching the DB trigger's arithmetic.
-  const { chartData, seriesSessions, hasData, withYear } = useMemo(() => {
+  // (bpm x clicks_per_beat), matching the DB trigger's arithmetic. The period is a
+  // chart-only filter: the catalog's Max/Last stay the stored trigger records.
+  const { chartData, seriesSessions, hasData, hasAnySession, withYear, unit } = useMemo(() => {
+    // The window is anchored here, once per recomputation: the control changes
+    // `period`, a refetch changes `sessions`, and both rebuild the points.
+    const now = new Date();
+    const inPeriod = filterSessions(sessions, period, now);
+
     // The palette position comes from the whole list: visibility only decides which
     // series is drawn, so hiding one exercise does not shift the colors of the rest.
     const byCreation = [...exercises].sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -51,7 +59,7 @@ export function ProgressChart({ exercises, sessions }: Props) {
     const visible = byCreation.filter((e) => e.dashboard_visible);
 
     const series = visible.map((exercise) =>
-      sessions
+      inPeriod
         .filter((s) => s.exercise_id === exercise.id)
         .sort((a, b) => a.created_at.localeCompare(b.created_at)),
     );
@@ -69,17 +77,22 @@ export function ProgressChart({ exercises, sessions }: Props) {
       };
     });
 
-    // Only the points actually drawn decide whether a year is needed: a series
-    // hidden by `dashboard_visible` must not change what the axis says.
+    // Only the points actually drawn decide the axis wording: a series hidden by
+    // `dashboard_visible`, or a day outside the period, must not change what the
+    // axis says.
     const drawn = series.flat();
 
     return {
       chartData: { datasets },
       seriesSessions: series,
-      hasData: series.some((pts) => pts.length > 0),
+      hasData: drawn.length > 0,
+      // Distinguishes "nothing logged at all" from "nothing inside this window":
+      // both are empty charts, but only the second one is the period's doing.
+      hasAnySession: sessions.some((s) => visible.some((e) => e.id === s.exercise_id)),
       withYear: spansMultipleYears(drawn),
+      unit: tickUnit(drawn),
     };
-  }, [exercises, sessions]);
+  }, [exercises, sessions, period]);
 
   const options = useMemo<ChartOptions<'line'>>(() => {
     return {
@@ -89,13 +102,11 @@ export function ProgressChart({ exercises, sessions }: Props) {
       scales: {
         x: {
           type: 'time',
-          // Chart.js draws one grid line per tick, so fixing the unit to `week`
-          // is what makes the axis mark weekly subdivisions only: ticks step 7
-          // days instead of being auto-densed into days/hours. With no
-          // `isoWeekday`, `_generate` snaps the first tick with
-          // `adapter.startOf(min, 'week')`, and the date-fns adapter's `week`
-          // uses `weekStartsOn: 0` - so the lines land on Sundays.
-          time: { unit: 'week', stepSize: 1, tooltipFormat: 'PP' },
+          // Chart.js draws one grid line per tick, so the unit is what makes the
+          // axis mark readable subdivisions: `tickUnit` grows it with the window
+          // the control selected, which keeps weekly Sunday lines over a month or
+          // a quarter without leaving 52 of them over a year.
+          time: { unit, stepSize: 1, tooltipFormat: 'PP' },
           // No `displayFormats`: the tick callback below formats every label, and
           // `tooltipFormat` is the date-only fallback for anything that formats
           // through the scale instead.
@@ -149,12 +160,14 @@ export function ProgressChart({ exercises, sessions }: Props) {
         },
       },
     };
-  }, [seriesSessions, withYear]);
+  }, [seriesSessions, withYear, unit]);
 
   if (!hasData) {
     return (
       <div className="text-center py-10">
-        <p className="text-sm text-gray-400 dark:text-gray-500">{t('chart_empty')}</p>
+        <p className="text-sm text-gray-400 dark:text-gray-500">
+          {t(hasAnySession ? 'chart_empty_period' : 'chart_empty')}
+        </p>
       </div>
     );
   }

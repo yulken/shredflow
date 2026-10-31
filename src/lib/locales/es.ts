@@ -104,5 +104,11 @@ export const ES = {
     chart_title: 'BPM real en el tiempo',
     chart_y_axis: 'BPM real',
     chart_empty: 'No hay sesiones registradas aun para ejercicios mostrados en el grafico.',
+    chart_period_label: 'Periodo',
+    period_month: 'Ultimo mes',
+    period_quarter: 'Ultimos 3 meses',
+    period_year: 'Ultimo ano',
+    period_all: 'Todos los datos',
+    chart_empty_period: 'Ningun registro en este periodo.',
   },
 };
