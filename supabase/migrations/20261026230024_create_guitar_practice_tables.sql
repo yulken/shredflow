@@ -12,7 +12,7 @@
 - `practice_sessions` — individual practice session records for an exercise.
   - `id` (uuid, primary key)
   - `exercise_id` (uuid, FK to exercises, cascade delete)
-  - `tension_level` (integer 1-10) — self-reported tension during the session
+  - `tension_level` (integer 1-3) — self-reported tension during the session: 1 relaxed, 3 tense
   - `bpm` (integer) — BPM achieved during the session
   - `notes` (text) — free-form notes about the session
   - `created_at` (timestamptz)
@@ -23,7 +23,8 @@
 - Allow anon + authenticated full CRUD because the data is intentionally shared/public (single-tenant, no sign-in).
 
 3. Notes
-- A check constraint keeps `tension_level` in the valid 1–10 range.
+- A check constraint keeps `tension_level` in the valid 1–3 range. The stored number is the
+  level itself — no legacy scale and no normalization anywhere, so the CHECK is the only guard.
 - `practice_sessions.exercise_id` cascades on delete so removing an exercise cleans up its history.
 - An index on `practice_sessions.exercise_id` speeds up fetching a session history.
 */
@@ -40,7 +41,7 @@ CREATE TABLE IF NOT EXISTS exercises (
 CREATE TABLE IF NOT EXISTS practice_sessions (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   exercise_id uuid NOT NULL REFERENCES exercises(id) ON DELETE CASCADE,
-  tension_level integer NOT NULL DEFAULT 5 CHECK (tension_level >= 1 AND tension_level <= 10),
+  tension_level integer NOT NULL DEFAULT 2 CHECK (tension_level >= 1 AND tension_level <= 3),
   bpm integer NOT NULL DEFAULT 60,
   notes text,
   created_at timestamptz DEFAULT now()

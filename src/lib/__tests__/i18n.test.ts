@@ -1,6 +1,4 @@
 import { describe, expect, test } from 'vitest';
-import { readFile } from 'node:fs/promises';
-import { fileURLToPath } from 'node:url';
 import { getLang, setLang, t, tp, nextLanguage, CATEGORY_CANONICAL, categories, categoryLabel, categoryValue, dateLocale, type Locale } from '@/lib/i18n';
 import { EN } from '@/lib/locales/en';
 import { ES } from '@/lib/locales/es';

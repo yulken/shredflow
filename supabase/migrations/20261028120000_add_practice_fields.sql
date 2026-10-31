@@ -28,16 +28,24 @@ Follows 20261026230024_create_guitar_practice_tables.sql. Spec reference:
 - No new policies. The new columns are covered by the existing anon + authenticated
   CRUD policies on both tables, and the trigger's UPDATE of `exercises` runs as the
   same role that inserted the session.
+
+5. Re-runnability
+- Every statement is guarded (`ADD COLUMN IF NOT EXISTS`, `DROP ... IF EXISTS`) so a
+  partial re-run does not fail. `DROP TRIGGER` precedes `DROP FUNCTION` because the
+  trigger depends on the function.
 */
 
-ALTER TABLE exercises ADD COLUMN tab_url text;
-ALTER TABLE exercises ADD COLUMN dashboard_visible boolean NOT NULL DEFAULT true;
-ALTER TABLE exercises ADD COLUMN max_bpm integer;
-ALTER TABLE exercises ADD COLUMN last_bpm integer;
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS tab_url text;
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS dashboard_visible boolean NOT NULL DEFAULT true;
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS max_bpm integer;
+ALTER TABLE exercises ADD COLUMN IF NOT EXISTS last_bpm integer;
 
-ALTER TABLE practice_sessions ADD COLUMN clicks_per_beat integer NOT NULL DEFAULT 1 CHECK (clicks_per_beat >= 1);
+ALTER TABLE practice_sessions ADD COLUMN IF NOT EXISTS clicks_per_beat integer NOT NULL DEFAULT 1 CHECK (clicks_per_beat >= 1);
 
--- Trigger function: the single place Real BPM is computed on the backend.
+-- Trigger function: the single place Real BPM is computed on the backend. The
+-- trigger is dropped first because the function it depends on cannot be dropped
+-- while the trigger still references it.
+DROP TRIGGER IF EXISTS sync_exercise_bpm_records ON practice_sessions;
 DROP FUNCTION IF EXISTS update_exercise_bpm_records();
 
 CREATE FUNCTION update_exercise_bpm_records()
@@ -49,15 +57,16 @@ DECLARE
 BEGIN
   real_bpm_value := COALESCE(NEW.bpm, 0) * COALESCE(NEW.clicks_per_beat, 1);
   UPDATE exercises
-    WHERE id = NEW.exercise_id
     SET max_bpm = GREATEST(max_bpm, real_bpm_value),
-        last_bpm = real_bpm_value;
+        last_bpm = real_bpm_value
+    WHERE id = NEW.exercise_id;
   RETURN NEW;
 END;
 $$;
 
-CREATE TRIGGER sync_exercise_bpm_records ON practice_sessions
-AFTER INSERT FOR EACH ROW EXECUTE FUNCTION update_exercise_bpm_records();
+CREATE TRIGGER sync_exercise_bpm_records
+AFTER INSERT ON practice_sessions
+FOR EACH ROW EXECUTE FUNCTION update_exercise_bpm_records();
 
 -- One-off fill for exercises that already have history from before this migration.
 DROP FUNCTION IF EXISTS seed_legacy_exercise_records();
@@ -74,7 +83,6 @@ BEGIN
     SELECT id FROM exercises WHERE max_bpm IS NULL OR last_bpm IS NULL
   LOOP
     UPDATE exercises
-      WHERE id = seeded_exercise_id
       SET max_bpm = (
           SELECT MAX(bpm * clicks_per_beat)
           FROM practice_sessions WHERE exercise_id = seeded_exercise_id
@@ -83,7 +91,8 @@ BEGIN
           SELECT bpm * clicks_per_beat
           FROM practice_sessions WHERE exercise_id = seeded_exercise_id
           ORDER BY created_at DESC LIMIT 1
-        );
+        )
+      WHERE id = seeded_exercise_id;
     seeded_count := seeded_count + 1;
   END LOOP;
   RETURN seeded_count;

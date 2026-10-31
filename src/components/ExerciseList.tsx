@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Plus, Music2, Pencil, Trash2, X, Activity, Gauge, ArrowLeft, Clock } from 'lucide-react';
+import { Plus, Music2, Pencil, Trash2, X, Activity, Gauge, Clock, ExternalLink, Eye, EyeOff, TrendingUp } from 'lucide-react';
 import { supabase, type Exercise } from '@/lib/supabase';
 import { t, tp, categories, CATEGORY_CANONICAL, categoryLabel } from '@/lib/i18n';
 
@@ -143,6 +143,28 @@ export function ExerciseList({ onSelectExercise }: Props) {
                 </p>
               )}
 
+              <div className="flex items-center gap-2 mb-3">
+                {exercise.tab_url && (
+                  <a
+                    href={exercise.tab_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                    aria-label={t('link_tab_aria')}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                    {t('field_tab_url')}
+                  </a>
+                )}
+                {!exercise.dashboard_visible && (
+                  <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 ml-auto">
+                    <EyeOff className="h-3 w-3" />
+                    {t('badge_off_chart')}
+                  </span>
+                )}
+              </div>
+
               <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                 {exercise.category && (
                   <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
@@ -153,6 +175,18 @@ export function ExerciseList({ onSelectExercise }: Props) {
                   <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                     <Gauge className="h-3.5 w-3.5" />
                     {t('goal_line', { bpm: exercise.target_bpm })}
+                  </span>
+                )}
+                {exercise.max_bpm !== null && (
+                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                    <TrendingUp className="h-3.5 w-3.5" />
+                    {t('stat_max_bpm')} · {exercise.max_bpm}
+                  </span>
+                )}
+                {exercise.last_bpm !== null && (
+                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                    <Clock className="h-3.5 w-3.5" />
+                    {t('stat_last_bpm')} · {exercise.last_bpm}
                   </span>
                 )}
                 <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 ml-auto">
@@ -189,15 +223,27 @@ function ExerciseForm({
   const [description, setDescription] = useState(exercise?.description || '');
   const [category, setCategory] = useState(exercise?.category || '');
   const [targetBpm, setTargetBpm] = useState(exercise?.target_bpm?.toString() || '');
+  const [tabUrl, setTabUrl] = useState(exercise?.tab_url || '');
+  const [visible, setVisible] = useState(exercise ? exercise.dashboard_visible : true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) {
       setError(t('error_title_required'));
       return;
+    }
+    // Normalized at write time: new URL() validates and canonicalizes; the
+    // card renders the stored value verbatim as an external link.
+    let tabUrlValue: string | null = null;
+    if (tabUrl.trim()) {
+      try {
+        tabUrlValue = new URL(tabUrl.trim()).href;
+      } catch {
+        setError(t('error_invalid_url'));
+        return;
+      }
     }
     setSaving(true);
     setError('');
@@ -207,6 +253,8 @@ function ExerciseForm({
       description: description.trim() || null,
       category: category.trim() || null,
       target_bpm: targetBpm ? parseInt(targetBpm, 10) : null,
+      tab_url: tabUrlValue,
+      dashboard_visible: visible,
     };
 
     if (exercise) {
@@ -307,6 +355,42 @@ function ExerciseForm({
               max={400}
               className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              {t('field_tab_url')}
+            </label>
+            <input
+              type="text"
+              value={tabUrl}
+              onChange={(e) => setTabUrl(e.target.value)}
+              placeholder={t('placeholder_tab_url')}
+              className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+              {t('field_visibility')}
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              {[true, false].map((value) => (
+                <button
+                  key={String(value)}
+                  type="button"
+                  onClick={() => setVisible(value)}
+                  className={`flex items-center justify-center gap-1.5 py-2.5 rounded-xl text-sm font-semibold transition-colors active:scale-95 ${
+                    visible === value
+                      ? 'bg-brand-600 hover:bg-brand-700 text-white shadow-md'
+                      : 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                  }`}
+                >
+                  {value ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                  {value ? t('visibility_show') : t('visibility_hide')}
+                </button>
+              ))}
+            </div>
           </div>
 
           {error && (

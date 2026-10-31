@@ -1,5 +1,6 @@
 import { describe, expect, test } from 'vitest';
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { LANGUAGES, LANGUAGE_NAMES, CATEGORY_CANONICAL, setLang, categories, dateLocale, nextLanguage, type Locale } from '@/lib/i18n';
 import { EN } from '@/lib/locales/en';
@@ -238,6 +239,44 @@ describe('source form', () => {
         expect(decode(line.raw)).toStrictEqual(strings[line.key]);
       }
     }
+  });
+});
+
+// The escape rule deliberately reaches past the dictionaries: `\uXXXX` is a
+// property of JS *string literals*, so the same byte sequence written as JSX
+// text is not an escape and renders as `\`, `u`, `2`, ... That is how the BPM
+// step buttons showed `\u22121` and `\u22125` on screen - no type error, no lint
+// rule, no runtime throw, nothing that notices it. The claim is made over every
+// app source because JSX text is where the mistake is possible.
+describe('escapes written outside a string literal', () => {
+  const srcRoot = fileURLToPath(new URL('../../', import.meta.url));
+  const ESCAPE = /\\u[0-9a-fA-F]{4}/;
+  // A line that carries no quote or backtick at all cannot hold a string
+  // literal, so an escape on it is text - the JSX case. Regex literals are
+  // covered by the same rule in practice: they always sit inside an expression
+  // whose line quotes the surrounding code.
+  const QUOTE = /['"`]/;
+
+  const appSources = readdirSync(srcRoot, { recursive: true, encoding: 'utf8' }).filter(
+    (entry) => /\.(?:ts|tsx)$/.test(entry),
+  );
+
+  test('no app source writes an escape where nothing quotes it', () => {
+    const offenders = appSources.flatMap((entry) => {
+      const path = join(srcRoot, entry);
+      return readFileSync(path, 'utf8')
+        .split('\n')
+        .flatMap((line, i) => (ESCAPE.test(line) && !QUOTE.test(line) ? [`${relative(srcRoot, path)}:${i + 1}`] : []));
+    });
+    expect(offenders).toStrictEqual([]);
+  });
+
+  test('the two BPM step labels are string literals, not JSX text', () => {
+    // The two call sites the bug was found at, pinned as the fixed form: the
+    // minus sign reaches the screen, and the file stays ASCII-only.
+    const view = readFileSync(fileURLToPath(new URL('../../components/SessionView.tsx', import.meta.url)), 'utf8');
+    expect(view).toContain("{'\\u22121'}");
+    expect(view).toContain("{'\\u22125'}");
   });
 });
 
