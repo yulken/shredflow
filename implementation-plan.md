@@ -1,6 +1,7 @@
 # Shredlog — Implementation Plan (requirements reconciliation)
 
-Status: **ACTIVE** — Phases A · B · C · D done (2026-10-31). Legacy log seeded; acceptance #1–#3
+Status: **ACTIVE** — Phases A · B · C · D done (2026-10-31), including the chart polish Caio asked for
+(lateral legend, weekly-only gridlines, date-only tooltips). Legacy log seeded; acceptance #1–#3
 verified at the schema/data level. One item left: the browser pass (chart vs spreadsheet, tab URL,
 visibility toggle) — needs Caio to click through it.
 Spec reference: `requirements.md` · Repo: `shredlog` (Vite/React + Supabase)
@@ -90,10 +91,13 @@ trigger exactly (single formula, two implementations). Stepper kept as-is.
 ## 4. Phase D — Dashboard chart (`src/components/Dashboard.tsx` + `ProgressChart.tsx`) — ✅ DONE 2026-10-31
 
 - New component `src/components/ProgressChart.tsx`:
-  - X axis: `created_at` (Chart.js time scale).
+  - X axis: `created_at` (Chart.js time scale), ticks fixed to one per week so the gridlines mark
+    weekly subdivisions only; labels localized (`src/lib/chart.ts`) and year-bearing only when the
+    plotted range spans more than one year.
   - Y axis: **Real BPM**.
   - One series per exercise where `dashboard_visible = true`.
-  - Fixed per-exercise color palette + legend; tooltip shows date / base BPM / clicks / tension.
+  - Fixed per-exercise color palette; legend lateral (right, top-aligned) beside the plot; tooltip
+    shows the occurrence date (no clock time) / base BPM / clicks / tension.
 - Mounted in a **standalone Dashboard screen** (per D4): `Dashboard.tsx` renders the catalog table
   (name, max/last BPM, visibility) + the chart; `App.tsx` gains a third top-level view (brand button
   routes to Dashboard; drill-down remains available from Dashboard back into exercises/sessions).
@@ -149,15 +153,20 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
 5. Phase E — already satisfied by the E-a trigger; nothing left to write **except** the Phase C
    stat-card read switch.
 6. ✅ Final pass — full acceptance-criteria sweep against `requirements.md` + `vitest`/`tsc`/build
-   (2026-10-31, data level: legacy log equivalence, trigger records, CHECK probes, RLS). Remaining: the
-   browser pass on the chart, the tab URL write and the visibility toggle.
+   (2026-10-31, data level: legacy log equivalence, trigger records, CHECK probes, RLS). The chart
+   polish Caio asked for (lateral legend, weekly gridlines, date-only tooltips) is applied and
+   verified automatically. Remaining: the browser pass on the chart, the tab URL write and the
+   visibility toggle.
 
 ## 8. Verification
 
 - `vitest` extended: `bpm.test.ts` (`realBpm`, plus the migration-text lockstep), pure helpers
-  around supabase payloads, `locales.test.ts` for the new i18n keys.
+  around supabase payloads, `locales.test.ts` for the new i18n keys, `src/lib/__tests__/chart.test.ts`
+  for the chart's date rule (day-only labels, conditional year, per-locale shapes), and
+  `src/components/__tests__/chart-source.test.ts` for the legend/axis wiring off the source.
 - Manual acceptance pass: add exercise (with tab URL + visibility) → log with clicks/tension →
-  chart renders visibility-filtered Real-BPM series → Max/Last update with zero manual input.
+  chart renders visibility-filtered Real-BPM series → Max/Last update with zero manual input. On the
+  chart: legend as a column on the right, one gridline per week, tooltips with the date only.
 - Amend `requirements.md` wording where D1/D2 deviate from the spec letter.
 - Build/dev check per existing convention: `npm run build` / `npm run dev` (PATH needs
   `~/.local/node/bin`).
@@ -274,7 +283,10 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
 - **Pending** — one item left: the manual acceptance pass in the browser, which needs Caio — the
   Dashboard chart against the legacy spreadsheet (48 sessions over 7 exercises, all `dashboard_visible`
   true → 7 datasets, `PALETTE` is 8 colors so no collision), the tab URL write, and the
-  visibility toggle redrawing the chart. The data behind all three is already verified above.
+  visibility toggle redrawing the chart. The data behind all three is already verified above, and the
+  chart's own shape is checked in the tests above; what only the browser can confirm is the legend
+  column on the right, the 7 Sunday grid lines over Sep 13 .. Oct 25, and a tooltip that reads a date
+  with no hour.
 - **2026-10-31 local schema verified over REST (read-only, GET only)** ✅ — target: local Supabase kong
   (`http://127.0.0.1:54321`, `supabase_kong_shredflow 54321->8000`), `apikey`/`Bearer` = the anon key in
   `.env`, `Prefer: count=exact`:
@@ -315,3 +327,42 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
   same day inside rolled-back transactions (see the DDL + idempotency probes entry).
 - Charting deps now in `package.json`: `chart.js@4.5.1`, `react-chartjs-2@5.3.1`,
   `chartjs-adapter-date-fns@3.0.0`, `date-fns@4.4.0` (peer of the adapter).
+- **2026-10-31 chart polish (Caio's three asks)** ✅ — `src/components/ProgressChart.tsx`:
+  - **Legend lateral**: `position: 'right'`, `align: 'start'`, point-style labels
+    (`boxWidth: 8`, `padding: 10`, `font: { size: 11 }`). Right rather than left because the Y-axis
+    title already occupies the left edge; `align: 'start'` stacks the 7 entries from the plot's top
+    instead of trading chart height for a row of labels under the axis. The canvas still carries no
+    control (no `onClick`): the eye in the catalog is the only writer of `dashboard_visible`.
+  - **Weekly gridlines only**: `time: { unit: 'week', stepSize: 1, tooltipFormat: 'PP' }` — Chart.js
+    draws one grid line per tick, so fixing the unit is what stops the axis auto-densifying ticks
+    into days/hours; plus `grid: { drawTicks: false }` and `ticks: { maxRotation: 0, autoSkip: true,
+    padding: 8, callback }`. Correction to what was claimed when this was proposed: omitting
+    `isoWeekday` does **not** give unaligned 7-day steps — `_generate` snaps the first tick with
+    `adapter.startOf(min, 'week')` (`node_modules/chart.js/dist/chart.js`), and the date-fns
+    adapter's `week` uses `weekStartsOn: 0`, so the lines land on Sundays. Confirmed over the seeded
+    range: 7 grid lines — Sep 13, Sep 20, Sep 27, Oct 4, Oct 11, Oct 18, Oct 25.
+  - **Labels localized, and no clock time**: ticks go through
+    `callback: (v) => tickDateLabel(Number(v), dateLocale(), withYear)` and the tooltip title through
+    `tooltipDateLabel(x, dateLocale(), withYear)` — the adapter's `displayFormats` were removed,
+    since the callback formats every label and they would be dead config. `tooltipFormat: 'PP p'`
+    became `'PP'`, and no label asks for `hour`/`minute` or uses `toLocaleString`: the log is
+    day-based (requirements §2) and the seeded rows carry an invented 12:00 UTC nobody logged.
+  - **Year only when it matters**: the rule is extracted to `src/lib/chart.ts` (`spansMultipleYears`,
+    `tickDateLabel`, `tooltipDateLabel`) and computed from the points actually drawn —
+    `const drawn = series.flat()` → `withYear: spansMultipleYears(drawn)` — so hiding a series with
+    the eye never changes what the axis says. The whole seeded log is 2026, so no label carries a
+    year today; a log that lands in 2027 starts showing it in ticks and tooltips with nothing to
+    change here.
+  - Tests: new `src/lib/__tests__/chart.test.ts` (10 tests — the year rule, the no-clock-time rule
+    across the three locales, and each locale's label shape: `en-US` "Sep 14" / "Sep 14, 2026",
+    `pt-BR` "14 de set." / "14 de set. de 2026", `es-ES` "14 sept" / "14 sept 2026"; padded day only
+    where the tooltip asks for it), and `src/components/__tests__/chart-source.test.ts` rewritten to
+    assert the legend/axis/date wiring from the source instead of pinning the old default-top legend.
+    Two bugs in the new assertions, fixed: `not.toContain('supabase')` hit the `import type` of
+    `Exercise`/`PracticeSession`, and prose comments that name `isoWeekday`/`displayFormats` to say
+    they are absent broke the plain negatives — both negatives are now scoped to the `time: {…}`
+    object. The year tests use mid-year, noon timestamps so no browser zone can move a date into
+    another year (this machine is -03:00).
+  - `vitest` 85 passed; `tsc --noEmit`, `eslint` and `npm run build` clean. The dev server on 5173
+    serves the new module: the legend block and tick callback are in the transformed output, and
+    `displayFormats` / `'PP p'` are gone from it. Visual acceptance is still Caio's browser pass.

@@ -14,6 +14,7 @@ import { Line } from 'react-chartjs-2';
 import { t, dateLocale } from '@/lib/i18n';
 import { tensionLabel } from '@/lib/tension';
 import { realBpm } from '@/lib/bpm';
+import { spansMultipleYears, tickDateLabel, tooltipDateLabel } from '@/lib/chart';
 import type { Exercise, PracticeSession } from '@/lib/supabase';
 
 // Time scale needs the date-fns adapter registered above; LinearScale covers
@@ -42,7 +43,7 @@ type Props = {
 export function ProgressChart({ exercises, sessions }: Props) {
   // One series per exercise with dashboard_visible = true; Y is Real BPM
   // (bpm x clicks_per_beat), matching the DB trigger's arithmetic.
-  const { chartData, seriesSessions, hasData } = useMemo(() => {
+  const { chartData, seriesSessions, hasData, withYear } = useMemo(() => {
     // The palette position comes from the whole list: visibility only decides which
     // series is drawn, so hiding one exercise does not shift the colors of the rest.
     const byCreation = [...exercises].sort((a, b) => a.created_at.localeCompare(b.created_at));
@@ -68,10 +69,15 @@ export function ProgressChart({ exercises, sessions }: Props) {
       };
     });
 
+    // Only the points actually drawn decide whether a year is needed: a series
+    // hidden by `dashboard_visible` must not change what the axis says.
+    const drawn = series.flat();
+
     return {
       chartData: { datasets },
       seriesSessions: series,
       hasData: series.some((pts) => pts.length > 0),
+      withYear: spansMultipleYears(drawn),
     };
   }, [exercises, sessions]);
 
@@ -83,12 +89,24 @@ export function ProgressChart({ exercises, sessions }: Props) {
       scales: {
         x: {
           type: 'time',
-          time: {
-            tooltipFormat: 'PP p',
-            displayFormats: { hour: 'PP p', day: 'PP', week: 'PP', month: 'MMM yyyy' },
+          // Chart.js draws one grid line per tick, so fixing the unit to `week`
+          // is what makes the axis mark weekly subdivisions only: ticks step 7
+          // days instead of being auto-densed into days/hours. With no
+          // `isoWeekday`, `_generate` snaps the first tick with
+          // `adapter.startOf(min, 'week')`, and the date-fns adapter's `week`
+          // uses `weekStartsOn: 0` - so the lines land on Sundays.
+          time: { unit: 'week', stepSize: 1, tooltipFormat: 'PP' },
+          // No `displayFormats`: the tick callback below formats every label, and
+          // `tooltipFormat` is the date-only fallback for anything that formats
+          // through the scale instead.
+          grid: { color: 'rgba(107, 114, 128, 0.12)', drawTicks: false },
+          ticks: {
+            color: '#9ca3af',
+            maxRotation: 0,
+            autoSkip: true,
+            padding: 8,
+            callback: (v) => tickDateLabel(Number(v), dateLocale(), withYear),
           },
-          grid: { color: 'rgba(107, 114, 128, 0.12)' },
-          ticks: { color: '#9ca3af' },
         },
         y: {
           title: { display: true, text: t('chart_y_axis'), color: '#9ca3af' },
@@ -99,25 +117,28 @@ export function ProgressChart({ exercises, sessions }: Props) {
       },
       plugins: {
         legend: {
+          // Lateral, top-aligned: the Y-axis title already sits on the left, so
+          // the series list goes right. Vertical stacking keeps the plot wide
+          // instead of trading height for a row of 7 labels under the axis.
+          position: 'right',
+          align: 'start',
           labels: {
             color: '#6b7280',
             usePointStyle: true,
             boxWidth: 8,
+            padding: 10,
+            font: { size: 11 },
           },
         },
         tooltip: {
-          // Tooltip shows date / base BPM / clicks / tension per point.
+          // Tooltip shows date / base BPM / clicks / tension per point - the date
+          // only, since a practice log is a day, not a moment (`src/lib/chart.ts`).
           callbacks: {
             title: (items) => {
               if (items.length === 0) return '';
               const x = items[0].parsed.x;
               if (typeof x !== 'number') return '';
-              return new Date(x).toLocaleString(dateLocale(), {
-                day: '2-digit',
-                month: 'short',
-                hour: '2-digit',
-                minute: '2-digit',
-              });
+              return tooltipDateLabel(x, dateLocale(), withYear);
             },
             label: (ctx) => {
               const session = seriesSessions[ctx.datasetIndex]?.[ctx.dataIndex];
@@ -128,7 +149,7 @@ export function ProgressChart({ exercises, sessions }: Props) {
         },
       },
     };
-  }, [seriesSessions]);
+  }, [seriesSessions, withYear]);
 
   if (!hasData) {
     return (
