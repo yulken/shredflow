@@ -168,7 +168,8 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
 ## 8. Verification
 
 - `vitest` extended: `bpm.test.ts` (`realBpm`, plus the migration-text lockstep), pure helpers
-  around supabase payloads, `locales.test.ts` for the new i18n keys, `src/lib/__tests__/chart.test.ts`
+  around supabase payloads, `locales.test.ts` for the new i18n keys and for the value-level claim that
+  a `pt`/`es` string is not the English one, `src/lib/__tests__/chart.test.ts`
   for the chart's date rule (day-only labels, conditional year, per-locale shapes),
   `src/lib/__tests__/period.test.ts` for the period windows (day counts, boundary inclusivity, the
   tick unit derived from the drawn points), `src/components/__tests__/chart-source.test.ts` for
@@ -455,3 +456,38 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
   - `vitest` 111 passed (8 files); `tsc --noEmit`, `eslint` and `npm run build` clean; `dist/` now
     ships `favicon.svg` next to `index.html`, whose built `<link>` points at it. Dev server on 5173
     serves `/favicon.svg` → `200 image/svg+xml`. Tab rendering itself is Caio's browser pass.
+- **2026-11-01 locale accent + translation pass** ✅ — Caio's accent pass over `pt`/`es`, then the
+  untranslated keys left in English. Two defects the pass itself produced, found on the bytes rather
+  than the rendered UI: two Spanish strings came out with the diacritic on the wrong letter
+  (`'áuñ'` in `chart_empty`, `'Ningúñ'` in `chart_empty_period`) — plain ASCII-looking to the rules
+  that existed — and the pass "corrected" `CATEGORY_CANONICAL[5]` to `'Improvisação'`, which broke the
+  accent-folded matching the DB path depends on. The stored canonical is `Improvisaçáon` (folds to
+  `Improvisacaon`), pinned at `src/lib/__tests__/i18n.test.ts:218-228`; the display labels stay
+  correctly accented in `pt.ts`/`es.ts`, so the DB value and the on-screen label are separate claims.
+  - `src/lib/i18n.ts`: `\uXXXX` escapes replaced by real characters (`Português`, `Español`,
+    `Técnica`), so the dictionary stays readable and the escape rule still means something; the
+    canonical spelling restored. Accents are characters everywhere, not escapes, in the same reason.
+  - `src/lib/locales/es.ts`: 53 keys were still English and are now Spanish — categories
+    `Velocidad` / `Calentamiento` / `Acordes` / `Estudio`, `¿…?` on the question labels, `RÉCORD`,
+    `Aún`, `¿Cómo fue la práctica?`.
+  - `src/lib/locales/{pt,es}.ts`: `aria_close_form` → `Fechar formulário`, the four BPM step labels →
+    `Reduzir/Aumentar BPM em 1/5`, `stat_max_bpm` and `catalog_col_max` → `Máximo BPM` (same change in
+    `es.ts`). Four keys stay byte-identical to English on purpose: `app_brand`, `bpm_unit`,
+    `placeholder_tab_url`, plus `placeholder_bpm` in PT — a brand name, a unit and two placeholders.
+  - Guards for the class that passed green: `locales.test.ts` now claims values, not only structure.
+    `values are not English` (3 tests) — a `pt`/`es` string may not equal its English one outside an
+    explicit allowlist; the allowlist itself must still equal English, so it cannot rot into a place to
+    park new English copy; and no `pt`/`es` string may carry a word neither language has
+    (placeholder tokens are stripped first, so `{count}` does not read as `count`). The `source form`
+    rules gained the Spanish inverted marks in the allowed alphabet (`¡` and `¿` sit below `À` in
+    Latin-1), an NFC check, bare-word matching that ignores case through `isWord` — moved to module
+    scope, `\p{L}` so `Último` counts as a word and `_` keeps a key name like `tension_label` from
+    reading as a spelling — and `MUST_NOT_WRITE`, which refuses the wrong-letter forms by name
+    (`auñ`, `aeuñ`, `ningúñ`, `improvisacão`, `sessõe`). Both new claims were validated by injecting
+    English into `es.ts` and then reverted: `stat_last_bpm` set to the English string fails naming that
+    key, and a half-English `chart_empty` is caught by the word rule, which the equality check cannot
+    see.
+  - `vitest` 117 passed (8 files); `tsc -b`, `eslint src` and `npm run build` clean (the single-chunk
+    523 KB warning is pre-existing). Changes are uncommitted, awaiting Caio. The browser acceptance
+    pass now also covers the `pt`/`es` locale and the date·time rendering at
+    `src/components/SessionView.tsx:348-357`.

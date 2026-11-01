@@ -11,8 +11,11 @@ import { PT } from '@/lib/locales/pt';
 // `i18n.ts` that mount them. The line is drawn at wording, so nothing here
 // quotes a translated word: every unit is structural - which keys exist, which
 // braces a string carries, how many categories a locale lists, which codes the
-// engine can switch to. The file therefore stays green over a rewrite of the
-// provisional `pt.ts`/`es.ts` wording. The byte-level rules in `source form` hold
+// engine can switch to - except for the one claim that is about a value rather
+// than a shape, in `values are not English`: a `pt`/`es` string may not be the
+// English one, which is asserted by comparing dictionaries to each other, not by
+// naming any wording. Rewording a translated string therefore stays green;
+// leaving one in English does not. The byte-level rules in `source form` hold
 // over any wording too, and they are what notices a diacritic being dropped.
 //
 // These are the dictionaries' structural invariants enforced at test time: the
@@ -41,6 +44,12 @@ const braces = (value: string): string[] => [...new Set(value.match(/\{\w+\}/g) 
 
 const decode = (raw: string): string =>
   raw.replace(/\\u[0-9a-fA-F]{4}/g, (c) => String.fromCharCode(parseInt(c.slice(2), 16)));
+
+// A word boundary that counts accented letters as letters: JS `\b` reads 'á' and
+// 'ñ' as non-word, so `\bultimo\b` would match inside 'Último' and `\bauñ\b` would
+// match nothing at all. `\p{L}` covers both languages' letters; `_` is kept in the
+// word too, so a key name like `tension_label` never reads as a value's spelling.
+const isWord = (line: string, w: string) => new RegExp(`(?<![\\p{L}_])${w}(?![\\p{L}_])`, 'iu').test(line);
 
 describe('key parity', () => {
   // `en.ts` is the authored reference that defines the key set, so the check
@@ -122,6 +131,66 @@ describe('placeholder parity', () => {
       const universe = Object.values(DICTIONARIES[code].strings).flatMap((value) => braces(value));
       expect([...new Set(universe)].sort()).toStrictEqual(['{bpm}', '{count}']);
     }
+  });
+});
+
+// The one claim this suite could not make before: a dictionary whose values are
+// still English satisfies every rule above - the keys exist, the braces match, the
+// bytes are ASCII-clean and NFC-normalized - so a `pt.ts`/`es.ts` left in English
+// was green. The invariant is on the values: a `pt`/`es` string answers in its own
+// language, except for the keys listed below, which carry a brand name, a unit and
+// two placeholders whose text is the same in all three.
+const SHARED_WITH_EN: Record<string, string[]> = {
+  pt: ['app_brand', 'placeholder_bpm', 'bpm_unit', 'placeholder_tab_url'],
+  es: ['app_brand', 'bpm_unit', 'placeholder_tab_url'],
+};
+const shared = (code: string) => SHARED_WITH_EN[code] ?? [];
+const TRANSLATED = ['pt', 'es'];
+// `en.ts` declares its keys as literal properties, so the comparison is made over
+// the dictionary as the engine indexes it, the same widening `placeholder parity` uses.
+const EN_STRINGS = EN.strings as Record<string, string>;
+
+describe('values are not English', () => {
+  test('a pt/es string is not the English one, outside an explicit allowlist', () => {
+    for (const code of TRANSLATED) {
+      const untranslated = Object.keys(EN_STRINGS).filter(
+        (key) => DICTIONARIES[code].strings[key] === EN_STRINGS[key] && !shared(code).includes(key),
+      );
+      expect(untranslated).toStrictEqual([]);
+    }
+  });
+
+  // The allowlist is a claim about these keys, not an escape hatch: a key listed
+  // here that stops matching English fails as loudly as a key never translated, so
+  // the list cannot rot into a place to park new English copy.
+  test('every allowlisted key really is the English string', () => {
+    for (const code of TRANSLATED) {
+      const stale = shared(code).filter((key) => DICTIONARIES[code].strings[key] !== EN_STRINGS[key]);
+      expect(stale).toStrictEqual([]);
+    }
+  });
+
+  // Words that exist in neither language - the shape English takes when only part
+  // of a value is copied, which the equality check above cannot see. Contractions
+  // and cognates a real pt/es string uses are deliberately absent: 'de', 'do', 'a',
+  // 'no', 'e', 'o', 'la', 'en', 'con', 'por', 'para', 'mas', 'si', 'total'.
+  const EN_ONLY = ['the', 'and', 'or', 'of', 'for', 'to', 'in', 'on', 'from', 'with',
+    'your', 'you', 'this', 'that', 'what', 'how', 'was', 'were', 'enter', 'add',
+    'delete', 'remove', 'save', 'clear', 'notes', 'minutes', 'session', 'practice',
+    'history', 'chart', 'category', 'goal', 'current', 'new', 'last', 'best',
+    'average', 'type', 'start', 'stop', 'reset', 'day', 'week', 'month', 'year',
+    'count', 'max', 'log', 'edit', 'set'];
+
+  test('no pt/es string carries a word that only English has', () => {
+    // A placeholder is a token, not a word: `{count}` is the same text in all three
+    // dictionaries, so it is removed before matching rather than read as 'count'.
+    const words = (value: string) => value.replace(/\{\w+\}/g, ' ');
+    const offenders = TRANSLATED.flatMap((code) =>
+      Object.entries(DICTIONARIES[code].strings)
+        .filter(([, value]) => EN_ONLY.some((w) => isWord(words(value), w)))
+        .map(([key]) => `${code}:${key}`),
+    );
+    expect(offenders).toStrictEqual([]);
   });
 });
 
@@ -264,12 +333,6 @@ describe('source form', () => {
       'categoria', 'proxima', 'record', 'maximo', 'cromatica'],
     i18n: ['tecnica', 'improvisacao', 'improvisacion', 'portugues', 'portugus', 'espanol'],
   };
-
-  // A word boundary that counts accented letters as letters: JS `\b` reads 'á' and
-  // 'ñ' as non-word, so `\bultimo\b` would match inside 'Último' and `\bauñ\b` would
-  // match nothing at all. `\p{L}` covers both languages' letters; `_` is kept in the
-  // word too, so a key name like `tension_label` never reads as a value's spelling.
-  const isWord = (line: string, w: string) => new RegExp(`(?<![\\p{L}_])${w}(?![\\p{L}_])`, 'iu').test(line);
 
   // Matching ignores case: the words that carry a diacritic start a sentence or a
   // label as often as they sit inside one, and 'Ultimo' is as wrong as 'ultimo'.
