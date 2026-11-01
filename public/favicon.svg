@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+  <!-- The tab mark is the header brand mark (App.tsx): a rounded tile on the
+      brand gradient with the lucide Guitar glyph in white. Written by hand so a
+      favicon does not depend on a build step or on lucide-react's React wrapper,
+      and so the file is reviewable as SVG. The glyph data is inlined from
+      lucide-react v0.446.0's icons/guitar.js (4 paths + the sound-hole dot). -->
+  <defs>
+    <!-- bg-gradient-to-br from-brand-500 to-brand-700: top-left to bottom-right. -->
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#f04438" />
+      <stop offset="1" stop-color="#b42318" />
+    </linearGradient>
+  </defs>
+
+  <!-- rx 7 of 24 is the rounded-xl proportion the header tile uses (12px radius
+      on a 36px square). -->
+  <rect width="24" height="24" rx="7" fill="url(#brand)" />
+
+  <!-- The header draws a 20px glyph inside a 36px tile (Guitar h-5 w-5 in a
+      h-9 w-9 square), i.e. a glyph box of 0.56 of the tile. A favicon renders at
+      16px, where that ratio leaves strokes under 1px and the guitar blurs, so the
+      glyph is enlarged to 0.78 of the tile and its stroke widened to 3.0 (about
+      1.2px at 16px, against lucide's 2). It still clears the rounded corners: the
+      glyph's own 0..24 box maps to 2.64..21.36, plus half a stroke, inside 24. -->
+  <g transform="translate(2.64 2.64) scale(0.78)" fill="none" stroke="#ffffff" stroke-width="3.0" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m11.9 12.1 4.514-4.514" />
+    <path d="M20.1 2.3a1 1 0 0 0-1.4 0l-1.114 1.114A2 2 0 0 0 17 4.828v1.344a2 2 0 0 1-.586 1.414A2 2 0 0 1 17.828 7h1.344a2 2 0 0 0 1.414-.586L21.7 5.3a1 1 0 0 0 0-1.4z" />
+    <path d="m6 16 2 2" />
+    <path d="M8.2 9.9C8.7 8.8 9.8 8 11 8c2.8 0 5 2.2 5 5 0 1.2-.8 2.3-1.9 2.8l-.9.4A2 2 0 0 0 12 18a4 4 0 0 1-4 4c-3.3 0-6-2.7-6-6a4 4 0 0 1 4-4 2 2 0 0 0 1.8-1.2z" />
+    <circle cx="11.5" cy="12.5" r=".5" fill="#ffffff" stroke="none" />
+  </g>
+</svg>

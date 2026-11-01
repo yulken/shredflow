@@ -1,10 +1,11 @@
 # Shredlog — Implementation Plan (requirements reconciliation)
 
 Status: **ACTIVE** — Phases A · B · C · D done (2026-10-31), including the chart polish Caio asked for
-(lateral legend, weekly-only gridlines, date-only tooltips) and the period control (month / quarter /
-year / all) on the Dashboard chart. Legacy log seeded; acceptance #1–#3
-verified at the schema/data level. One item left: the browser pass (chart vs spreadsheet, tab URL,
-visibility toggle, period buttons) — needs Caio to click through it.
+(lateral legend, weekly-only gridlines, date-only tooltips), the period control (month / quarter /
+year / all) on the Dashboard chart, and the tab icon (the app mark as `public/favicon.svg`). Legacy
+log seeded; acceptance #1–#3 verified at the schema/data level. One item left: the browser pass
+(chart vs spreadsheet, tab URL, visibility toggle, period buttons, tab icon) — needs Caio to click
+through it.
 Spec reference: `requirements.md` · Repo: `shredlog` (Vite/React + Supabase)
 Related: a prior SessionView plan (`~/.opencode/plan/session-view-adjustments.md`) already resolved decision D1 — see §6.
 
@@ -170,12 +171,15 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
   around supabase payloads, `locales.test.ts` for the new i18n keys, `src/lib/__tests__/chart.test.ts`
   for the chart's date rule (day-only labels, conditional year, per-locale shapes),
   `src/lib/__tests__/period.test.ts` for the period windows (day counts, boundary inclusivity, the
-  tick unit derived from the drawn points), and `src/components/__tests__/chart-source.test.ts` for
-  the legend/axis/period wiring off the source.
+  tick unit derived from the drawn points), `src/components/__tests__/chart-source.test.ts` for
+  the legend/axis/period wiring off the source, and `src/__tests__/index-html.test.ts` for the shell
+  (the icon `href` resolves to a real file under `public/`, the gradient stops are palette hexes, the
+  static title matches `page_title`).
 - Manual acceptance pass: add exercise (with tab URL + visibility) → log with clicks/tension →
   chart renders visibility-filtered Real-BPM series → Max/Last update with zero manual input. On the
   chart: legend as a column on the right, one grid line per week, tooltips with the date only, and the
-  four period buttons narrowing the points (Max/Last unchanged).
+  four period buttons narrowing the points (Max/Last unchanged). Plus the tab itself: the guitar mark
+  beside the title, on either theme.
 - Amend `requirements.md` wording where D1/D2 deviate from the spec letter.
 - Build/dev check per existing convention: `npm run build` / `npm run dev` (PATH needs
   `~/.local/node/bin`).
@@ -419,3 +423,35 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
     all → 48; the month window keeps Oct 5 .. Oct 26, so it is the only button that changes the curve
     today. Dev server serves the new modules (group markup, `filterSessions`, `tickUnit`, the 6
     strings in `pt.ts`). Visual acceptance stays in Caio's browser pass.
+- **2026-10-31 tab icon** ✅ — Caio's ask. The template's `<link rel="icon" href="/vite.svg">` had no
+  file behind it: there was no `public/` directory, so the dev server answered the icon request with
+  `text/html` (`curl -o /dev/null -w '%{content_type}' /vite.svg` → `text/html`, the SPA fallback) and
+  the built page had no icon asset at all (`dist/` held only `assets/` + `index.html`).
+  - `public/favicon.svg` (new): the app mark, matching the header tile — rounded square (`rx 7` of 24,
+    the `rounded-xl` proportion of the 12px radius on the header's 36px square) on the brand gradient
+    `#f04438 → #b42318` (`tailwind.config.js` brand 500 → 700, `bg-gradient-to-br` direction), with the
+    lucide `Guitar` glyph in white. Written as SVG by hand rather than generated, so a favicon does not
+    depend on a build step or on lucide's React wrapper; the glyph path data is inlined from
+    `lucide-react@0.446.0` `dist/esm/icons/guitar.js` (4 paths + the sound-hole dot), and
+    `public/favicon.svg` parses as XML with its 4 `d` attributes byte-identical to that file.
+  - The glyph is drawn larger than the header draws it (0.78 of the tile, stroke 3.0, against the
+    header's 20/36 = 0.56 ratio at stroke 2): a favicon renders at 16px, where the header's ratio puts
+    strokes under 1px and the guitar blurs. Rendered through `google-chrome --headless` at 16/32/64px
+    on white and on `#111` (`/tmp/opencode/final.png`) — readable on both themes at 16px, and the
+    glyph clears the rounded corners (its 0..24 box maps to 2.64..21.36, plus half a stroke, inside 24).
+  - `index.html`: `href="/favicon.svg"` with `type="image/svg+xml"`; the static `<title>` now equals
+    the English `page_title`, since `useLanguage` overwrites `document.title` at mount and the markup
+    only owns first paint; the two `og:image`/`twitter:image` metas pointing at
+    `https://bolt.new/static/og_default.png` were dropped — they are generator leftovers, and an
+    absolute URL in the shell is a request the app cannot serve or change (no OG image asset exists to
+    replace them with).
+  - `src/__tests__/index-html.test.ts` (new, 7): structural claims about the shell that nothing else
+    checks — the icon `href` resolves to a file that exists under `public/` (the claim that failed
+    before), the declared `type` matches the bytes served, every gradient stop is a hex the Tailwind
+    palette defines, the tile is painted from a fixed gradient (no `var()` and no
+    `prefers-color-scheme`, which a favicon file cannot see), the static title equals
+    `t('page_title')` for the default locale, `<html lang>` matches the language the engine defaults
+    to, and no absolute URL is referenced from the markup.
+  - `vitest` 111 passed (8 files); `tsc --noEmit`, `eslint` and `npm run build` clean; `dist/` now
+    ships `favicon.svg` next to `index.html`, whose built `<link>` points at it. Dev server on 5173
+    serves `/favicon.svg` → `200 image/svg+xml`. Tab rendering itself is Caio's browser pass.
