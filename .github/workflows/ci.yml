@@ -1,0 +1,48 @@
+# The gate is the four commands Caio runs locally, in the same order, and nothing
+# else: `lint`, `typecheck`, `vitest run` and `vite build` are all green on the
+# tree, so CI says what the working tree says. `npm ci` rather than `npm install`
+# because `package-lock.json` is committed: CI installs the tree the repo already
+# has instead of resolving a new one.
+#
+# Node is pinned by `.nvmrc`, not a matrix. `vitest.config.ts` declares no
+# `environment`, so the suite runs in plain Node and depends on Node's own globals
+# -- `readdirSync` recursion in the escape rule, `navigator` in the engine's
+# default-language choice -- so the version it was written on is the version that
+# runs. Node's `navigator.language` is `en-US` and `localStorage` is undefined, so
+# the hooks fall through their try/catch exactly as they do on this machine: no
+# flag, no jsdom, no locale or timezone difference between a runner and a laptop.
+#
+# Bundle size is reported by the build itself, not gated: the single chunk is
+# above Vite's 500 KB warning today, and that is the current shape of the app, not
+# a regression to fail on.
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# A check reads the repository and publishes nothing, so the token stays read-only.
+permissions:
+  contents: read
+
+# One run per ref; a newer push replaces the check still running on the same branch.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build

@@ -2,8 +2,8 @@
 // `ProgressChart.tsx` so the year rule can be checked without a React render.
 //
 // The legacy log is day-based (requirements §2: a Practice Log has a `Date`, no
-// time), so neither label shows a clock time. The seeded rows carry an invented
-// 12:00 UTC timestamp (`supabase/seed.sql`), which is another reason the hour is
+// time), so neither label shows a clock time. The seeded rows in the local database
+// carry an invented 12:00 UTC timestamp, which is another reason the hour is
 // left out: it would display a value nobody logged.
 //
 // The year is shown only when it can change what the reader is looking at - i.e.

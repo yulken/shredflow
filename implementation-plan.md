@@ -82,8 +82,9 @@ trigger exactly (single formula, two implementations). Stepper kept as-is.
 - Stat cards: recompute on Real BPM. Sessions count unchanged; average over `realOf(session)`
   (client-side aggregation over a stored session's `bpm × clicks_per_beat` is arithmetic, not a
   stat write — the *overwrite* stats stay server-side per D2). `stat_record_bpm` and
-  `stat_last_bpm` read `exercise.max_bpm` / `exercise.last_bpm` (derived fallback for pre-migration
-  rows only), NOT the client-side derivation at `SessionView.tsx:68–72`, which must be retired.
+  `stat_last_bpm` read the stored `exercise.max_bpm` / `exercise.last_bpm`
+  (`SessionView.tsx:29-55`); the client-side derivation at `SessionView.tsx:98-99` stays only as the
+  fallback for rows written before the trigger migration.
 - Stat grid goes 3 → 4 cards (sessions / average / record / last) — `grid-cols-4`, `text-2xl` at the
   `w-9` breakpoint, as the Dashboard catalog already does.
 - i18n keys: `field_clicks`, `real_bpm_label`, `stat_last_bpm`.
@@ -122,10 +123,10 @@ Decision-dependent options (kept for the record):
 - **E-c) Keep deriving client-side:** current behavior; functionally equivalent, deviates from spec
   letter → would require amending `requirements.md`.
 
-✅ RESOLVED → **E-a) DB-side trigger** (shipped in the Phase A migration). Consequences, all landed
-or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) mirrors it exactly
-(done); `SessionView` stat cards switch from client-side derivation to reading
-`exercise.max_bpm`/`last_bpm` — **pending, Phase C**.
+✅ RESOLVED → **E-a) DB-side trigger** (shipped in the Phase A migration). Both consequences landed:
+the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) mirrors it exactly, and `SessionView`'s stat
+cards read the stored `exercise.max_bpm`/`last_bpm` (`src/components/SessionView.tsx:29-55`) — done in
+Phase C, where the derived fallback there stays only for pre-migration rows.
 
 ## 6. Open decisions (blocking) — all resolved
 
@@ -181,7 +182,10 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
   chart: legend as a column on the right, one grid line per week, tooltips with the date only, and the
   four period buttons narrowing the points (Max/Last unchanged). Plus the tab itself: the guitar mark
   beside the title, on either theme.
-- Amend `requirements.md` wording where D1/D2 deviate from the spec letter.
+- ✅ `requirements.md` amended where the implementation deviates from the spec letter: D1 (the tension
+  scale is the stored integer), D2 (`Max BPM`/`Last BPM` are stored fields the trigger writes) and the
+  session date — §3.2 asks the user to input a date, the log carries the day of the insert instead. The
+  three are recorded in `requirements.md` §6, the last one on 2026-11-01.
 - Build/dev check per existing convention: `npm run build` / `npm run dev` (PATH needs
   `~/.local/node/bin`).
 
@@ -236,10 +240,9 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
 - **2026-10-31 CLI** ✅ — `supabase@^2.122.0` added as devDependency; `npx supabase --version`
   returns 2.122.0.
 - **2026-10-31 tension normalized to 1–3** ✅ — D1 re-resolved as spec option (b) in full.
-  Migration 1 edited in place (valid because the local database is reset from zero; the remote
-  project still has the old `1..10` applied, so if it is ever used again the change needs a new
-  migration with `UPDATE practice_sessions SET tension_level = LEAST(GREATEST(tension_level, 1), 3)`
-  plus the tightened CHECK): `DEFAULT 5` → `DEFAULT 2` (5 was inside the old range and would have
+  Migration 1 edited in place (valid because the local database is reset from zero; the remote project
+  that still holds the old `1..10` is retired as of 2026-11-01 and will not be used again, so no
+  follow-up migration is planned): `DEFAULT 5` → `DEFAULT 2` (5 was inside the old range and would have
   failed the new one on every insert that omits the column), `CHECK` → `>= 1 AND <= 3`, header
   §1/§3 reworded. Code: `tensionTier()` deleted, `tensionLabel`/`tensionColor` index
   `LABEL_KEYS[level - 1]` / `TEXT_COLORS[level - 1]` directly, `SessionView` history dots use
@@ -322,8 +325,8 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
   `Músicas - exercicios-log.csv`, is 48 session rows over 7 exercises, 2026-09-14 .. 2026-10-26, ASCII,
   date-ascending, no `(id, date)` duplicates, and every `BPM Real` equals `BPM × Cliques` (checked row by
   row). Columns are `Nome, ID, Data, BPM, Cliques por batida, BPM Real` — **no tension column**, and one
-  row carries a stray `Hoje, 31/10/2026` annotation past the columns. `supabase/seed.sql` (new, matches the
-  CLI's existing `sql_paths = ["./seed.sql"]`) inserts the 7 titles and the 48 sessions:
+  row carries a stray `Hoje, 31/10/2026` annotation past the columns. `supabase/seed.sql` (written at the
+  time, matching the CLI's existing `sql_paths = ["./seed.sql"]`) inserts the 7 titles and the 48 sessions:
   `tension_level 2` (the column default — nothing invented), `created_at` = the logged day at 12:00 UTC (the
   log has no time; noon keeps the day under a -03:00 client), `description`/`category`/`target_bpm` NULL,
   CSV quoting removed (`"""Punisher"""` → `Punisher`), the CSV's `ID` column dropped, records left to the
@@ -340,6 +343,14 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
   is 2 everywhere, `notes` all NULL, `dashboard_visible` true on all seven.
   Not executed at the time: the idempotency guard itself and the CHECK probe — both covered later the
   same day inside rolled-back transactions (see the DDL + idempotency probes entry).
+  **Corrected 2026-11-01:** neither `supabase/seed.sql` nor `Músicas - exercicios-log.csv` is in the repo
+  — the seed was never committed (`git log --all -- supabase/seed.sql` returns nothing) and neither file is
+  on disk — so the 48 sessions and 7 exercises exist only in the local database and cannot be rebuilt from
+  the tree, and a `supabase db reset` has no seed file to run even though
+  `supabase/config.toml:72` still names `./seed.sql`. Seeding is out of scope by Caio's decision on
+  2026-11-01. The claims above stand as the record of what was verified on 2026-10-31 against the data
+  then in the database; they are no longer reproducible, which also covers the `Improvisaçáon` spelling
+  the canonical list in `src/lib/i18n.ts` mirrors.
 - Charting deps now in `package.json`: `chart.js@4.5.1`, `react-chartjs-2@5.3.1`,
   `chartjs-adapter-date-fns@3.0.0`, `date-fns@4.4.0` (peer of the adapter).
 - **2026-10-31 chart polish (Caio's three asks)** ✅ — `src/components/ProgressChart.tsx`:
@@ -491,3 +502,14 @@ or pending as noted: the trigger owns Real-BPM arithmetic, so `realBpm()` (A3) m
     523 KB warning is pre-existing). Changes are uncommitted, awaiting Caio. The browser acceptance
     pass now also covers the `pt`/`es` locale and the date·time rendering at
     `src/components/SessionView.tsx:348-357`.
+- **2026-11-01 scope decisions (Caio)** ✅ — three calls, written into both docs:
+  - **Seeding stays out.** `supabase/seed.sql` and the legacy CSV are not in the repo and will not be
+    added; the correction sits in the 2026-10-31 seeded entry above, so the 48 rows read as the state of
+    the local database, not as data the tree can rebuild.
+  - **The session date is the current day, by design.** `practice_sessions.created_at` takes the schema
+    default (`now()`), and the insert sends only `exercise_id`, `tension_level`, `bpm`, `clicks_per_beat`
+    and `notes` (`src/components/SessionView.tsx:60-66`), so the form has no date field on purpose.
+    `requirements.md` §3.2 now states that and §6 records it as a deliberate deviation.
+  - **The old remote Supabase project is retired.** It will not be used again, so the wider `1..10`
+    tension CHECK it still holds needs no follow-up migration or clamp; the local database, reset from
+    zero, is the environment the app runs against.

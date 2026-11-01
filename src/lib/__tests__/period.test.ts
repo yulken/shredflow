@@ -20,8 +20,8 @@ const session = (created_at: string): PracticeSession => ({
   created_at,
 });
 
-// Noon timestamps, like `supabase/seed.sql`: the same calendar day under any
-// client zone, so the boundaries below are not zone-sensitive.
+// Noon timestamps, as the seeded rows in the local database use them: the same
+// calendar day under any client zone, so the boundaries below are not zone-sensitive.
 const LOG = [
   session('2026-09-14T12:00:00Z'), // 47 days back: outside a month, inside a quarter
   session('2026-09-30T12:00:00Z'), // 31 days back: one day outside a month
