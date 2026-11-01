@@ -12,14 +12,14 @@ import { PT } from '@/lib/locales/pt';
 // quotes a translated word: every unit is structural - which keys exist, which
 // braces a string carries, how many categories a locale lists, which codes the
 // engine can switch to. The file therefore stays green over a rewrite of the
-// provisional `pt.ts`/`es.ts` content, and over the interim accent-insensitive
-// Portuguese currently accepted.
+// provisional `pt.ts`/`es.ts` wording. The byte-level rules in `source form` hold
+// over any wording too, and they are what notices a diacritic being dropped.
 //
 // These are the dictionaries' structural invariants enforced at test time: the
 // next key added to `en.ts` without its two translations fails here instead of
 // at a runtime miss.
 //
-// One claim cannot be made over imported values: the ASCII-only rule is about
+// One claim cannot be made over imported values: the byte-level rules are about
 // the bytes in a file, so the sources are read from disk. An imported string has
 // already been decoded by the parser, which is why the source text is decoded
 // again here and compared to the runtime value.
@@ -213,25 +213,99 @@ describe('the constants that mount the dictionaries', () => {
   });
 });
 
-// The ASCII rule is a claim about the bytes in a file, so it is the one
+// The byte-level rules are claims about the bytes in a file, so they are the one
 // invariant this suite cannot make over imported values: an imported string has
 // already been decoded by the parser. The escape claim compares the source text
 // against the runtime value, which is the only check that would notice a mangled
 // byte on the way in.
 describe('source form', () => {
-  test('no locale source or the engine that reads it carries a character off ASCII', () => {
-    const files = [...SOURCE_FILES, { code: 'i18n', path: fileURLToPath(new URL('../i18n.ts', import.meta.url)) }];
+  const files = [...SOURCE_FILES, { code: 'i18n', path: fileURLToPath(new URL('../i18n.ts', import.meta.url)) }];
+  const read = (path: string) => readFileSync(path, 'utf8');
+
+  // Accents are written as characters rather than escapes, so the dictionary is
+  // readable. That is safe only while the bytes stay right: an editor saving NFD
+  // turns 'e' + acute into two code points, and a file read as Latin-1 and saved
+  // as UTF-8 turns it into a letter plus a symbol. Both render and both fail
+  // here. Latin-1 Supplement letters, the Spanish inverted marks and the em dash
+  // are the whole alphabet a dictionary may carry, so anything else off ASCII is
+  // drift.
+  const NOT_ALLOWED = /[^\x20-\x7e¡¿À-ÿ—]/;
+
+  test('no locale source or the engine that reads it carries a character off that alphabet', () => {
     const offenders = files.flatMap((file) =>
-      readFileSync(file.path, 'utf8')
+      read(file.path)
         .split('\n')
-        .flatMap((line, i) => (/[^\x20-\x7e]/.test(line) ? [`${file.code}:${i + 1}`] : [])),
+        .flatMap((line, i) => (NOT_ALLOWED.test(line) ? [`${file.code}:${i + 1}: ${line.match(NOT_ALLOWED)![0]}`] : [])),
     );
     expect(offenders).toStrictEqual([]);
   });
 
-  // Every `\uXXXX` in a locale's own text decodes to the character the engine
-  // holds, so a value is what the file says it is, and only escapes moved it
-  // through every tool that touched the file.
+  // Composed rather than decomposed: a combining mark would render the same glyph
+  // and read differently everywhere else in this file, the spelling guard included.
+  test('the sources are NFC-normalized', () => {
+    const offenders = files
+      .filter((file) => read(file.path) !== read(file.path).normalize('NFC'))
+      .map((file) => file.code);
+    expect(offenders).toStrictEqual([]);
+  });
+
+  // A dropped diacritic is invisible to the two rules above: the unaccented
+  // spelling is plain ASCII and NFC-clean. So the words that carry a diacritic in
+  // the language the file is written in are listed, and their bare form is
+  // refused. A word that legitimately carries none is not listed - 'mes' is
+  // correct in Spanish, 'ano' in Portuguese - so those stay green.
+  const MUST_ACCENT: Record<string, string[]> = {
+    pt: ['exercicio', 'exercicios', 'sessao', 'sessoes', 'comecar', 'historico', 'sera', 'titulo',
+      'obrigatorio', 'descricao', 'medio', 'nivel', 'tensao', 'alcancado', 'anotacoes', 'proxima',
+      'grafico', 'invalida', 'ultimo', 'ultimos', 'mes', 'periodo', 'tecnica', 'improvisacao',
+      'portugues', 'portugus', 'formulario', 'maximo', 'cromatica'],
+    es: ['practica', 'evoluciono', 'sesion', 'ultimo', 'ultimos', 'grafico', 'periodo', 'ningun',
+      'tension', 'aun', 'ano', 'invalida', 'tecnica', 'improvisacion', 'titulo', 'descricao',
+      'categoria', 'proxima', 'record', 'maximo', 'cromatica'],
+    i18n: ['tecnica', 'improvisacao', 'improvisacion', 'portugues', 'portugus', 'espanol'],
+  };
+
+  // A word boundary that counts accented letters as letters: JS `\b` reads 'á' and
+  // 'ñ' as non-word, so `\bultimo\b` would match inside 'Último' and `\bauñ\b` would
+  // match nothing at all. `\p{L}` covers both languages' letters; `_` is kept in the
+  // word too, so a key name like `tension_label` never reads as a value's spelling.
+  const isWord = (line: string, w: string) => new RegExp(`(?<![\\p{L}_])${w}(?![\\p{L}_])`, 'iu').test(line);
+
+  // Matching ignores case: the words that carry a diacritic start a sentence or a
+  // label as often as they sit inside one, and 'Ultimo' is as wrong as 'ultimo'.
+  test('no word that carries a diacritic is written without it', () => {
+    const offenders = files.flatMap((file) => {
+      const bare = MUST_ACCENT[file.code] ?? [];
+      return read(file.path)
+        .split('\n')
+        .flatMap((line, i) => bare.filter((w) => isWord(line, w)).map((w) => `${file.code}:${i + 1}: ${w}`));
+    });
+    expect(offenders).toStrictEqual([]);
+  });
+
+  // A diacritic landing on the wrong letter is invisible to every rule above: 'áuñ'
+  // and 'Ningúñ' are in the allowed alphabet, NFC-clean, and not bare forms the list
+  // knows. The spellings this pass produced are refused by name, so the same slip is
+  // caught here instead of reaching the screen.
+  const MUST_NOT_WRITE: Record<string, string[]> = {
+    pt: ['improvisacão', 'sessõe'],
+    es: ['auñ', 'aeuñ', 'ningúñ'],
+    i18n: ['improvisacão'],
+  };
+
+  test('no word is written with a diacritic on the wrong letter', () => {
+    const offenders = files.flatMap((file) => {
+      const wrong = MUST_NOT_WRITE[file.code] ?? [];
+      return read(file.path)
+        .split('\n')
+        .flatMap((line, i) => wrong.filter((w) => isWord(line, w)).map((w) => `${file.code}:${i + 1}: ${w}`));
+    });
+    expect(offenders).toStrictEqual([]);
+  });
+
+  // The value on disk is the value the engine holds. Accents are written as
+  // characters, so this is byte-for-byte; `decode` still folds any `\uXXXX`, which
+  // keeps the claim true if a dictionary is ever written in escapes again.
   test('each dictionary\'s own text decodes to the values the engine reads', () => {
     for (const file of SOURCE_FILES) {
       const strings = DICTIONARIES[file.code].strings as Record<string, string>;
@@ -273,7 +347,7 @@ describe('escapes written outside a string literal', () => {
 
   test('the two BPM step labels are string literals, not JSX text', () => {
     // The two call sites the bug was found at, pinned as the fixed form: the
-    // minus sign reaches the screen, and the file stays ASCII-only.
+    // minus sign reaches the screen instead of the escape's own characters.
     const view = readFileSync(fileURLToPath(new URL('../../components/SessionView.tsx', import.meta.url)), 'utf8');
     expect(view).toContain("{'\\u22121'}");
     expect(view).toContain("{'\\u22125'}");

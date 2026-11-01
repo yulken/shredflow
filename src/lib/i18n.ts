@@ -11,7 +11,7 @@ export type Locale = {
 };
 
 export const LANGUAGES = ['en', 'pt', 'es'];
-export const LANGUAGE_NAMES: Record<string, string> = { en: 'English', pt: 'Portugu\u00e9s', es: 'Espa\u00f1ol' };
+export const LANGUAGE_NAMES: Record<string, string> = { en: 'English', pt: 'Português', es: 'Español' };
 
 const templates: Record<string, Locale> = { en: EN, es: ES, pt: PT };
 const DEFAULT_LANG = 'en';
@@ -77,7 +77,7 @@ export function categories(): string[] {
 // Canonical category values as stored in the DB (they were originally entered
 // in Portuguese). Display labels come from each locale's `categories` list,
 // matched by index, so localized UIs never split existing rows.
-export const CATEGORY_CANONICAL = ['T\u00e9cnica', 'Velocidade', 'Aquecimento', 'Acordes', 'Escalas', 'Improvisa\u00e7\u00e1on', 'Ritmo', 'Estudo'];
+export const CATEGORY_CANONICAL = ['Técnica', 'Velocidade', 'Aquecimento', 'Acordes', 'Escalas', 'Improvisaçáon', 'Ritmo', 'Estudo'];
 
 const fold = (s: string): string => s.normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 

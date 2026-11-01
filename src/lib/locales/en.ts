@@ -5,9 +5,9 @@ export const EN = {
   categories: ['Technique', 'Speed', 'Warm-up', 'Chords', 'Scales', 'Improvisation', 'Rhythm', 'Study'],
   strings: {
     app_brand: 'GuitarTrain',
-    footer_tagline: 'GuitarTrain \u2014 Guitar practice tracker',
+    footer_tagline: 'GuitarTrain — Guitar practice tracker',
 
-    page_title: 'GuitarTrain \u2014 Guitar practice tracker',
+    page_title: 'GuitarTrain — Guitar practice tracker',
 
     theme_light: 'Switch to light mode',
     theme_dark: 'Switch to dark mode',
@@ -55,7 +55,7 @@ export const EN = {
     stat_record_bpm: 'Record BPM',
     tension_label: 'Tension level',
     bpm_achieved: 'BPM reached',
-    goal_reached: '\u2014 Goal reached!',
+    goal_reached: '— Goal reached!',
     notes_label: 'Notes',
     placeholder_notes: 'How was the practice? What to improve next time?',
     save_success: 'Session saved!',
