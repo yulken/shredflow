@@ -1,14 +1,9 @@
-// Period windows for the Dashboard chart control. Kept out of the components so
-// the arithmetic is checkable without a React render, like `src/lib/chart.ts`.
-//
-// The windows roll from the moment the chart is built, not from the newest log:
-// "last month" is the last 30 days, which is what the label says. A streak that
-// stops for 40 days therefore leaves the month window empty and the chart says so
-// (`chart_empty_period`) instead of sliding the window back to the last practice.
-//
-// Nothing here touches what the catalog shows: `max_bpm`/`last_bpm` are stored
-// records written by the trigger, so the period is a chart-only filter.
+// Chart period windows, kept out of the components so the arithmetic is checkable
+// without a React render. A window rolls from the clock it is handed, never from the
+// newest log, and it filters points only: the catalog's Max/Last stay the trigger's
+// stored records.
 
+import { DAY_MS } from './clock';
 import type { PracticeSession } from './supabase';
 
 export type Period = 'month' | 'quarter' | 'year' | 'all';
@@ -28,8 +23,6 @@ export const PERIOD_LABEL_KEYS: Record<Period, string> = {
 };
 
 export const PERIOD_STORAGE_KEY = 'chart_period';
-
-const DAY_MS = 24 * 60 * 60 * 1000;
 
 // Rolling day counts. A quarter is 90 days rather than a calendar quarter: the
 // window is a duration, so it keeps the same length whatever month it lands in.
@@ -59,13 +52,9 @@ export function filterSessions(sessions: PracticeSession[], period: Period, now:
 
 export type TickUnit = 'week' | 'month' | 'quarter';
 
-/**
- * Tick unit for the X axis, derived from the points actually drawn. Chart.js
- * draws one grid line per tick, so the unit has to grow with the window: weekly
- * lines are readable over a month or a quarter, but 52 of them over a year is the
- * axis pollution the chart was cleaned up to avoid. `week` keeps the Sunday
- * alignment the date-fns adapter's `week` start gives (`weekStartsOn: 0`).
- */
+/** Tick unit for the X axis, derived from the points actually drawn: Chart.js draws
+ * one grid line per tick, so the unit grows with the window. `week` keeps the Sunday
+ * alignment the date-fns adapter's `week` start gives (`weekStartsOn: 0`). */
 export function tickUnit(drawn: PracticeSession[]): TickUnit {
   if (drawn.length === 0) return 'week';
   const times = drawn.map((s) => new Date(s.created_at).getTime());

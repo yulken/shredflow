@@ -25,19 +25,16 @@ export function Dashboard({ onSelectExercise }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // The rows are read on mount, on the day rollover, and on return to the tab. A
-  // screen left open for days would otherwise keep showing the snapshot it took on
-  // mount: the chart's points, and the window the points are filtered through, both
-  // come off this state (`ProgressChart` anchors its `now` per recomputation), so
-  // nothing refreshes until something changes it.
-  //
-  // Its identity is fixed (`useCallback` over nothing) so the rollover timer keeps
-  // the midnight it was scheduled at: re-running that effect re-anchors the
-  // deadline at the current day, and the eye toggle re-renders this screen.
+  // Rows are read on mount, on the day rollover, and on return to the tab: a screen
+  // left open for days would keep the snapshot it took on mount, and both the chart's
+  // points and the window they are filtered through come off this state
+  // (`ProgressChart` anchors its `now` per recomputation). The identity is fixed
+  // (`useCallback` over nothing) so the rollover timer keeps the midnight it was
+  // scheduled at - re-running it would re-anchor the deadline at the current day, and
+  // the eye toggle re-renders this screen.
   const inFlight = useRef(false);
-  // A visibility write is optimistic, so a refresh that read the row before the
-  // write landed hands back the old flag and undoes the eye the user just clicked.
-  // A background refresh waits out the write instead of racing it.
+  // The visibility write is optimistic, so rows read before it landed carry the old
+  // flag: a background refresh waits the write out instead of undoing the click.
   const pendingWrite = useRef(false);
   const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
     // Two triggers landing in the same instant - a focus and a midnight timer -

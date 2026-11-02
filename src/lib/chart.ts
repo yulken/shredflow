@@ -1,22 +1,12 @@
-// Date formatting for the Dashboard chart's X axis and tooltips. Kept out of
-// `ProgressChart.tsx` so the year rule can be checked without a React render.
-//
-// The legacy log is day-based (requirements §2: a Practice Log has a `Date`, no
-// time), so neither label shows a clock time. The seeded rows in the local database
-// carry an invented 12:00 UTC timestamp, which is another reason the hour is
-// left out: it would display a value nobody logged.
-//
-// The year is shown only when it can change what the reader is looking at - i.e.
-// when the plotted range spans more than one year. Today's whole log is 2026, so
-// no label carries a year; once a log lands in 2027 both the ticks and the
-// tooltips start showing it on their own, with nothing to change here.
+// Date labels for the Dashboard chart's X axis and tooltips, kept out of
+// `ProgressChart.tsx` so the year rule is checkable without a React render. A log is
+// a day, not a moment (requirements §2), so no label carries a clock time; the year
+// appears only when the plotted range spans more than one year.
 
 import type { PracticeSession } from './supabase';
 
-/** True when the sessions actually drawn on the chart cover more than one year.
- * The year is read in the browser's zone - the same zone `toLocaleDateString`
- * prints below - so a session that renders as Dec 31 locally counts as 2025 even
- * if its UTC timestamp is Jan 1. */
+/** True when the sessions actually drawn cover more than one year. The year is read
+ * in the browser's zone, the same one `toLocaleDateString` prints below. */
 export function spansMultipleYears(sessions: PracticeSession[]): boolean {
   return new Set(sessions.map((s) => new Date(s.created_at).getFullYear())).size > 1;
 }

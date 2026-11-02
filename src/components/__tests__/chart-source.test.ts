@@ -10,9 +10,9 @@ import { fileURLToPath } from 'node:url';
 // the stored records instead of the points would only show in the numbers, an axis
 // that densifies into daily gridlines or prints a clock time is only visible on
 // screen, and a screen that never re-reads its rows is only visible days later. The
-// pure rules live in `src/lib/chart.ts`, `src/lib/period.ts` and `src/lib/day.ts`,
+// pure rules live in `src/lib/chart.ts`, `src/lib/period.ts` and `src/lib/clock.ts`,
 // tested directly in `src/lib/__tests__/chart.test.ts`, `period.test.ts` and
-// `day.test.ts`.
+// `clock.test.ts`.
 const chart = readFileSync(fileURLToPath(new URL('../ProgressChart.tsx', import.meta.url)), 'utf8');
 const dashboard = readFileSync(fileURLToPath(new URL('../Dashboard.tsx', import.meta.url)), 'utf8');
 const hook = readFileSync(fileURLToPath(new URL('../../hooks/useChartPeriod.ts', import.meta.url)), 'utf8');
@@ -173,7 +173,7 @@ describe('the eye in the catalog writes dashboard_visible', () => {
 // for days shows the rows it read on mount, and nothing on screen disagrees with
 // them, so the claim is made over the wiring that notices - the day boundary the
 // log turns on, and the two ways of looking at a tab again. The arithmetic itself is
-// `src/lib/day.ts`, checked directly in `src/lib/__tests__/day.test.ts`.
+// `src/lib/clock.ts`, checked directly in `src/lib/__tests__/clock.test.ts`.
 describe('a dashboard left open refreshes itself', () => {
   test('the screen schedules both boundaries', () => {
     expect(dashboard).toContain('useDayRollover(fetchData)');

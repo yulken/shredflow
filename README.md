@@ -79,7 +79,7 @@ sessions against them.
 ```
 src/components/   Dashboard, ExerciseList, SessionView, ProgressChart, toggles
 src/hooks/        theme, language, chart period (all persisted in localStorage)
-src/lib/          supabase client, i18n + locales, bpm, tension, chart, period
+src/lib/          supabase client, i18n + locales, bpm, tension, chart, period, clock
 supabase/         config.toml + migrations
 ```
 
@@ -88,10 +88,4 @@ supabase/         config.toml + migrations
 - **No sign-in.** The app is single-tenant: RLS policies grant full CRUD to `anon`
   and `authenticated`, so anyone holding the URL and anon key can read and write the
   data. Fine for a local tool; don't publish it with real data.
-- **Real BPM is spelled twice on purpose** — in the `sync_exercise_bpm_records`
-  trigger and in `src/lib/bpm.ts` — and a test pins both to the same product.
-- **A dashboard tab left open re-reads its rows** at local midnight (`src/lib/day.ts`,
-  the day being the unit a session is logged in) and when the tab comes back into
-  view. The re-read is silent: it keeps the chart on screen instead of blanking it,
-  and a failed one leaves the last rows readable.
 - The spec, and the deliberate deviations from it, are in [requirements.md](requirements.md).
