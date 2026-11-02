@@ -15,23 +15,22 @@ describe('the gate sits in front of the three views', () => {
     // not own; `ready` is what holds the views back.
     expect(app).toContain('{!ready ?');
     expect(app).toContain(': !session ?');
-    expect(app).toContain('<AuthView />');
+    expect(app).toContain('<AuthView theme=');
     expect(app).toContain('const { session, ready, signOut } = useAuth();');
   });
 
-  test('the nav and sign-out are inside the session, the toggles are not', () => {
-    // Navigating and ending a session are meaningless signed out; theme and
-    // language persist, so the sign-in screen still speaks the visitor's choice.
+  test('the header keeps only navigation; preferences and sign-out moved off it', () => {
+    // Settings names the account and carries the controls next to it; the nav is
+    // still inside the session because a signed-out visitor cannot reach it. The
+    // auth card holds the two preference controls for a visitor with no session.
     expect(app).toMatch(/\{session && \(\s*<nav/);
-    expect(app.indexOf('<ThemeToggle')).toBeGreaterThan(app.indexOf('{session &&'));
-    const navEnd = app.indexOf('</nav>');
-    expect(app.indexOf('<ThemeToggle')).toBeGreaterThan(navEnd);
-    expect(app.indexOf('<LanguageToggle')).toBeGreaterThan(navEnd);
-  });
-
-  test('signing out is reachable by name', () => {
-    expect(app).toContain('onClick={signOut}');
-    expect(app).toContain("aria-label={t('aria_sign_out')}");
+    expect(app).toContain('onClick={goSettings}');
+    expect(app).toContain("t('nav_settings')");
+    expect(app).not.toContain('<ThemeToggle');
+    expect(app).not.toContain('<LanguageToggle');
+    expect(app).not.toContain('onClick={signOut}');
+    expect(authView).toContain('<ThemeToggle theme={theme}');
+    expect(authView).toContain('<LanguageToggle lang={lang}');
   });
 });
 

@@ -2,6 +2,8 @@ import { useState } from 'react';
 import { Guitar, LogIn, UserPlus } from 'lucide-react';
 import { MIN_PASSWORD_LENGTH, looksLikeEmail, signIn, signUp, type AuthMode } from '@/lib/auth';
 import { t } from '@/lib/i18n';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { LanguageToggle } from '@/components/LanguageToggle';
 
 // The gate the app sits behind: one card, two modes. The mode switch is the same
 // segmented pair the exercise form uses for chart visibility, so a local reader
@@ -10,7 +12,19 @@ import { t } from '@/lib/i18n';
 //
 // The copy is picked from `src/lib/auth.ts`, which maps Supabase's English
 // errors onto dictionary keys, so nothing here quotes the backend's message.
-export function AuthView() {
+//
+// Theme and language ride along at the card's foot: a visitor with no session
+// has no Settings screen to reach, and the choices persist in the browser, so
+// the language of this card should be changeable here - the same two controls
+// the header used to hold, moved to the one screen a signed-out visitor sees.
+type Props = {
+  theme: 'light' | 'dark';
+  toggleTheme: () => void;
+  lang: string;
+  toggleLanguage: () => void;
+};
+
+export function AuthView({ theme, toggleTheme, lang, toggleLanguage }: Props) {
   const [mode, setMode] = useState<AuthMode>('sign-in');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -133,6 +147,11 @@ export function AuthView() {
             {busy ? t('auth_working') : mode === 'sign-up' ? t('sign_up_button') : t('sign_in_button')}
           </button>
         </form>
+
+        <div className="flex items-center justify-end gap-2 mt-5 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <ThemeToggle theme={theme} onToggle={toggleTheme} />
+          <LanguageToggle lang={lang} onToggle={toggleLanguage} />
+        </div>
       </div>
     </div>
   );

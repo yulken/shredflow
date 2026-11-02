@@ -1,10 +1,9 @@
 import { useState } from 'react';
-import { Guitar, BarChart3, Music2, LogOut } from 'lucide-react';
+import { Guitar, BarChart3, Music2, Settings } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/hooks/useAuth';
-import { ThemeToggle } from '@/components/ThemeToggle';
-import { LanguageToggle } from '@/components/LanguageToggle';
+import { SettingsView } from '@/components/SettingsView';
 import { AuthView } from '@/components/AuthView';
 import { t } from '@/lib/i18n';
 import { Dashboard } from '@/components/Dashboard';
@@ -12,28 +11,31 @@ import { ExerciseList } from '@/components/ExerciseList';
 import { SessionView } from '@/components/SessionView';
 import type { Exercise } from '@/lib/supabase';
 
-// Third top-level view (D4): Dashboard is the landing screen; the brand button
-// routes back to it, Exercises is reachable from the header, and drilling into
-// an exercise opens the session view, which returns to the list it came from.
+// Fourth top-level view: Dashboard is the landing screen; the brand button
+// routes back to it, Exercises and Settings are reachable from the header, and
+// drilling into an exercise opens the session view, which returns to the list
+// it came from.
 //
-// The gate sits in front of all three views: with no session there is nothing to
+// The gate sits in front of all four views: with no session there is nothing to
 // fetch, and the RLS policies of 20261102150000_add_user_ownership.sql refuse an
 // anonymous read anyway, so the sign-in card is what answers, not an empty chart.
-// Theme and language stay outside the gate - both persist, and the sign-in screen
-// is written in the language the visitor last chose. The nav and the sign-out
-// button are inside it: they navigate and end a session, so a signed-out visitor
-// cannot use them.
+// Theme, language and sign-out now live in Settings - named next to the account
+// they belong to - so the header carries navigation only. A signed-out visitor
+// cannot reach Settings, but the auth card carries the two preference controls
+// itself, and both persist in the browser, so the card still speaks the language
+// the visitor last chose.
 export default function App() {
-  const { theme, toggleTheme } = useTheme();
-  const { lang, toggleLanguage } = useLanguage();
+  const { theme, setTheme, toggleTheme } = useTheme();
+  const { lang, setLanguage, toggleLanguage } = useLanguage();
   const { session, ready, signOut } = useAuth();
-  const [listView, setListView] = useState<'dashboard' | 'exercises'>('dashboard');
+  const [listView, setListView] = useState<'dashboard' | 'exercises' | 'settings'>('dashboard');
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
 
   const openExercise = (exercise: Exercise) => setSelectedExercise(exercise);
   const backToList = () => setSelectedExercise(null);
   const goDashboard = () => { setListView('dashboard'); setSelectedExercise(null); };
   const goExercises = () => { setListView('exercises'); setSelectedExercise(null); };
+  const goSettings = () => { setListView('settings'); setSelectedExercise(null); };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-300">
@@ -77,17 +79,18 @@ export default function App() {
                   <span className="hidden sm:inline">{t('nav_exercises')}</span>
                 </button>
                 <button
-                  onClick={signOut}
-                  className="relative flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white transition-colors active:scale-95"
-                  aria-label={t('aria_sign_out')}
+                  onClick={goSettings}
+                  className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    listView === 'settings' && !selectedExercise
+                      ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
                 >
-                  <LogOut className="h-4 w-4" />
-                  <span className="hidden sm:inline">{t('auth_sign_out')}</span>
+                  <Settings className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t('nav_settings')}</span>
                 </button>
               </nav>
             )}
-            <ThemeToggle theme={theme} onToggle={toggleTheme} />
-            <LanguageToggle lang={lang} onToggle={toggleLanguage} />
           </div>
         </div>
       </header>
@@ -103,7 +106,7 @@ export default function App() {
             ))}
           </div>
         ) : !session ? (
-          <AuthView />
+          <AuthView theme={theme} toggleTheme={toggleTheme} lang={lang} toggleLanguage={toggleLanguage} />
         ) : selectedExercise ? (
           <SessionView
             exercise={selectedExercise}
@@ -111,6 +114,15 @@ export default function App() {
           />
         ) : listView === 'exercises' ? (
           <ExerciseList onSelectExercise={openExercise} />
+        ) : listView === 'settings' ? (
+          <SettingsView
+            theme={theme}
+            setTheme={setTheme}
+            lang={lang}
+            setLanguage={setLanguage}
+            email={session.user.email ?? ''}
+            signOut={signOut}
+          />
         ) : (
           <Dashboard onSelectExercise={openExercise} />
         )}

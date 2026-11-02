@@ -21,5 +21,12 @@ export function useLanguage() {
     setLangState(next);
   };
 
-  return { lang, toggleLanguage };
+  // Settings names the code it shows as pressed; the cycle stays for the compact
+  // control on the auth card. Same storage as the toggle, one value each time.
+  const setLanguage = (code: string) => {
+    setLang(code);
+    setLangState(code);
+  };
+
+  return { lang, setLanguage, toggleLanguage };
 }

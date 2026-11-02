@@ -128,5 +128,12 @@ export const EN = {
     error_sign_up: 'Could not create the account.',
     auth_sign_out: 'Sign out',
     aria_sign_out: 'Sign out of ShredFlow',
+    nav_settings: 'Settings',
+    settings_title: 'Settings',
+    settings_theme_label: 'Theme',
+    settings_language_label: 'Language',
+    settings_signed_in_as: 'Signed in as',
+    theme_option_light: 'Light',
+    theme_option_dark: 'Dark',
   },
 };

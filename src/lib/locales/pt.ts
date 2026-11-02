@@ -132,5 +132,12 @@ export const PT = {
     error_sign_up: 'Não foi possível criar a conta.',
     auth_sign_out: 'Sair',
     aria_sign_out: 'Sair da conta ShredFlow',
+    nav_settings: 'Configurações',
+    settings_title: 'Configurações',
+    settings_theme_label: 'Tema',
+    settings_language_label: 'Idioma',
+    settings_signed_in_as: 'Conectado como',
+    theme_option_light: 'Claro',
+    theme_option_dark: 'Escuro',
   },
 };

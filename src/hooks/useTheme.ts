@@ -22,5 +22,8 @@ export function useTheme() {
 
   const toggleTheme = () => setTheme((t) => (t === 'dark' ? 'light' : 'dark'));
 
-  return { theme, toggleTheme };
+  // Settings picks a value rather than flipping one: a form names the mode it
+  // shows as pressed, `toggleTheme` stays for the compact control on the auth
+  // card. Both write the same state, so the two controls cannot disagree.
+  return { theme, setTheme, toggleTheme };
 }

@@ -553,3 +553,27 @@ Phase C, where the derived fallback there stays only for pre-migration rows.
   - `eslint`, `tsc --noEmit` clean; `vitest` 198 passed (14 files), incl. `auth.test.ts`,
     `auth-schema.test.ts`, `auth-source.test.ts` and the phone-fit claims in `touch-targets.test.ts`.
     The browser pass (sign up, sign out, 320px card) is Caio's.
+- **2026-11-02 Settings view: preferences off the header** ✅ — scope decided by Caio: theme and
+  language move from the header buttons into an account screen; the sign-out moves with them; the
+  header keeps navigation only. Persistence stays `localStorage` (the browser's, not the account's:
+  no migration, and the choices survive signing out), and the controls stay reachable signed out
+  because the auth card carries the compact pair.
+  - `src/components/SettingsView.tsx`: fourth top-level view — segmented theme (Claro/Escuro,
+    Sun/Moon) and language (English/Português/Español, labels from `LANGUAGE_NAMES`) groups with
+    `aria-pressed`, then the account block: email and the sign-out button. Segmented values, not
+    cycles: a pressed button names the choice a toggle-button cannot say.
+  - `src/hooks/useTheme.ts` / `useLanguage.ts` gained `setTheme(mode)` / `setLanguage(code)` next to
+    the existing toggles; both write the same state and storage, so the form and the card's pair
+    cannot disagree.
+  - `App.tsx`: nav is Dashboard | Exercises | Settings inside the gate; `<ThemeToggle>` and
+    `<LanguageToggle>` left the header; `<AuthView>` took them as props at the card's foot. Gate
+    comment rewritten: Settings is behind the gate because the preferences persist regardless.
+  - 7 keys × en/pt/es (`nav_settings`, `settings_title`, `settings_theme_label`,
+    `settings_language_label`, `settings_signed_in_as`, `theme_option_light`, `theme_option_dark`),
+    no new placeholders; theme labels are new option keys because `theme_light`/`theme_dark` are the
+    toggle's action phrases ("Switch to…"), not names of the two modes.
+  - Tests: `settings-source.test.ts` (new, 6) pins the fourth branch, the header-with-only-nav claim
+    (App has no toggles/sign-out; AuthView and SettingsView do), pressed-value wiring, finger-sized
+    classes and key existence in all three dictionaries; `auth-source.test.ts` rewritten for the
+    move. `vitest` 203 passed (15 files); `eslint`, `tsc --noEmit` clean. Browser pass (Settings at
+    320px, sign-out from Settings, preferences surviving sign-out) is Caio's.

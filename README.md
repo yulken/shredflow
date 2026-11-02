@@ -11,13 +11,14 @@ same arithmetic by hand.
 
 ## What it does
 
-- **Sign in** — email + password: create an account, sign out from the header. The catalog and the session log belong to the account that wrote them.
+- **Sign in** — email + password: create an account, sign out from Settings. The catalog and the session log belong to the account that wrote them.
+- **Settings view** — theme, language and sign-out live on their own screen, next to the account's email; the header carries navigation only. A signed-out visitor still picks theme and language on the auth card, and both choices persist in the browser.
 - **Exercise catalog** — CRUD with category, target BPM, description and a tablature link.
 - **Session log** — base BPM, clicks per beat (1 / 2 / 4 / 6), hand tension (1 relaxed → 3 tense), free-form notes. The session date is the day you write it. The exercise's own Real BPM chart and its tab link sit on the same screen, and the link can be stored or edited there.
 - **Dashboard** — a multi-series line chart, one series per exercise, Y = Real BPM, X = the logged day, with `last month / last 3 months / last year / all data` windows.
 - **Chart visibility** — the eye toggle on each row puts that exercise on or off the chart.
 - **Max / Last BPM** — written by a Postgres trigger on every session insert, never by the client.
-- **UI in English, Portuguese and Spanish**, plus a light/dark theme. Both choices persist.
+- **UI in English, Portuguese and Spanish**, plus a light/dark theme.
 
 ## Screenshots
 
@@ -82,7 +83,7 @@ otherwise move under your account.
 ## Project structure
 
 ```
-src/components/   Dashboard, ExerciseList, SessionView, ProgressChart, toggles, AuthView
+src/components/   Dashboard, ExerciseList, SessionView, ProgressChart, SettingsView, AuthView, toggles
 src/hooks/        theme, language, chart period (the three persisted), day rollover, refresh on visible, auth session
 src/lib/          supabase client, auth, i18n + locales, bpm, tension, chart, period, clock
 supabase/         config.toml + migrations
