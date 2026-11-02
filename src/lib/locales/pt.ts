@@ -88,6 +88,8 @@ export const PT = {
     badge_off_chart: 'Fora do gráfico',
     error_invalid_url: 'URL inválida',
     link_tab_aria: 'Abrir tab',
+    aria_add_tab_url: 'Adicionar URL da tab',
+    aria_edit_tab_url: 'Editar URL da tab',
     nav_dashboard: 'Painel',
     nav_exercises: 'Exercícios',
     dashboard_title: 'Painel',

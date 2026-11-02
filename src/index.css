@@ -12,6 +12,17 @@
   body {
     @apply font-sans;
   }
+  /* No native up/down stepper on numeric fields: the +/- buttons beside them
+     already step, and the widget is the same control twice. */
+  input[type='number'] {
+    appearance: textfield;
+    -moz-appearance: textfield;
+  }
+  input[type='number']::-webkit-inner-spin-button,
+  input[type='number']::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+  }
 }
 
 @layer components {

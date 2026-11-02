@@ -51,8 +51,25 @@ describe('the labels carry a date, never a clock time', () => {
 
   test('the two label shapes match the seed log and the UI day', () => {
     // A single timestamp is 12:00 UTC, which is the same calendar day in -03:00.
-    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'en-US', false)).toBe('Sep 14');
+    // The tick is digits only, the tooltip still spells the month.
+    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'en-US', false)).toBe('09/14');
     expect(tooltipDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'en-US', false)).toBe('Sep 14');
+  });
+
+  test('the tick order comes from the locale, not a hardcoded pair', () => {
+    // The month-first locale writes MM/dd; the day-first ones write dd/MM. Nothing
+    // here names a locale to decide it - the order is read back from the locale.
+    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'en-US', false)).toBe('09/14');
+    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'pt-BR', false)).toBe('14/09');
+    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'es-ES', false)).toBe('14/09');
+  });
+
+  test('a tick is digits and a slash, whatever the locale', () => {
+    // No month name reaches the axis in any language: the whole point of the form
+    // is that the ticks stay short.
+    for (const locale of LOCALES) {
+      expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), locale, false)).toMatch(/^\d{2}\/\d{2}$/);
+    }
   });
 });
 
@@ -64,14 +81,17 @@ describe('the year is conditional', () => {
     }
   });
 
-  test('with it, each locale names the year in its own order', () => {
-    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'en-US', true)).toBe('Sep 14, 2026');
-    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'pt-BR', true)).toBe('14 de set. de 2026');
-    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'es-ES', true)).toBe('14 sept 2026');
+  test('with it, each locale keeps its own order and appends the year', () => {
+    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'en-US', true)).toBe('09/14/2026');
+    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'pt-BR', true)).toBe('14/09/2026');
+    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), 'es-ES', true)).toBe('14/09/2026');
   });
 
-  test('a single-digit day is padded only where the tooltip asks for it', () => {
-    expect(tickDateLabel(Date.UTC(2026, 8, 5, 12, 0), 'en-US', false)).toBe('Sep 5');
+  test('a single-digit day and month are both padded', () => {
+    // Columns: the ticks line up instead of jittering in width, and the tooltip
+    // pads its own day the same way.
+    expect(tickDateLabel(Date.UTC(2026, 8, 5, 12, 0), 'en-US', false)).toBe('09/05');
+    expect(tickDateLabel(Date.UTC(2026, 8, 5, 12, 0), 'pt-BR', false)).toBe('05/09');
     expect(tooltipDateLabel(Date.UTC(2026, 8, 5, 12, 0), 'en-US', false)).toBe('Sep 05');
   });
 });
@@ -81,6 +101,6 @@ describe('labels follow the app language', () => {
     // `dateLocale()` is a BCP-47 tag from the active locale file, not a hardcoded
     // 'en-US': the Chart.js date-fns adapter would have formatted in English.
     expect(dateLocale()).toBe('en-US');
-    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), dateLocale(), false)).toBe('Sep 14');
+    expect(tickDateLabel(Date.UTC(2026, 8, 14, 12, 0), dateLocale(), false)).toBe('09/14');
   });
 });

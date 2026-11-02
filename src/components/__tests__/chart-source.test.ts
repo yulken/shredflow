@@ -49,6 +49,47 @@ describe('the legend sits beside the plot', () => {
     expect(chart).toContain("position: 'right'");
     expect(chart).toContain("align: 'start'");
   });
+
+  test('whether it is drawn is the caller\'s', () => {
+    // The dashboard plots every visible series and needs the list; a screen that
+    // plots one exercise does not. Off at the caller, not off here.
+    expect(chart).toMatch(/compact = false/);
+    expect(chart).toMatch(/display: !compact/);
+  });
+});
+
+describe('the quiet variant keeps the axis and thins its marks', () => {
+  test('the density is the caller\'s, in both scales', () => {
+    // Chart.js draws one grid line per tick, so stepping two units halves the guides
+    // and the labels together; the limit on the Y axis caps ticks and lines in one
+    // go, which is what a narrow column needs instead of a ladder.
+    expect(chart).toMatch(/stepSize: compact \? 2 : 1/);
+    expect(chart).toMatch(/maxTicksLimit: compact \? 4 : undefined/);
+    // The quiet variant shrinks its own labels; the dashboard keeps Chart.js' own
+    // size, because that is what it has always drawn.
+    expect(chart).toMatch(/font: compact \? \{ size: 10 \} : undefined/);
+    // The dashboard gets neither: it keeps every mark the unit chose.
+    expect(chart).not.toMatch(/stepSize: 2\b/);
+    expect(chart).not.toMatch(/maxTicksLimit: 4\b/);
+  });
+
+  test('the guide lines are dimmer there, never gone', () => {
+    // They carry the subdivisions `tickUnit` chose; the tick marks under the labels
+    // never did, and were already off.
+    expect(chart).toMatch(/const GRID = 'rgba\(107, 114, 128, 0\.12\)'/);
+    expect(chart).toMatch(/const GRID_QUIET = 'rgba\(107, 114, 128, 0\.06\)'/);
+    expect(chart).toMatch(/grid: \{ color: compact \? GRID_QUIET : GRID, drawTicks: false \}/);
+    expect(chart).toMatch(/grid: \{ color: compact \? GRID_QUIET : GRID \}/);
+    // Nothing turns an axis off: the quiet variant still draws its labels.
+    expect(chart).not.toMatch(/display: false/);
+  });
+
+  test('the axis title is the one label the quiet variant drops', () => {
+    // The tooltip names the unit for every point, so the numbers stay readable and
+    // the name beside them goes.
+    expect(chart).toMatch(/title: \{ display: !compact, text: t\('chart_y_axis'\)/);
+    expect(chart).toMatch(/callback: \(v\) => tickDateLabel\(Number\(v\), dateLocale\(\), withYear\)/);
+  });
 });
 
 describe('the X axis marks readable subdivisions for the window drawn', () => {
@@ -56,7 +97,7 @@ describe('the X axis marks readable subdivisions for the window drawn', () => {
     // Chart.js draws one grid line per tick, so the unit is what stops the axis
     // densifying into days/hours. A hardcoded 'week' would put 52 lines on a year.
     expect(chart).toMatch(/unit: tickUnit\(drawn\)/);
-    expect(chart).toMatch(/time: \{ unit, stepSize: 1, tooltipFormat: 'PP' \}/);
+    expect(chart).toMatch(/time: \{ unit, stepSize: compact \? 2 : 1, tooltipFormat: 'PP' \}/);
     // Deliberately no `isoWeekday`: the adapter's own `week` start
     // (`weekStartsOn: 0`) is the alignment that was chosen. Both negatives are
     // scoped to the `time` object - the prose around it names these options to

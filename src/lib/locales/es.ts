@@ -92,6 +92,8 @@ export const ES = {
     badge_off_chart: 'Fuera del gráfico',
     error_invalid_url: 'URL inválida',
     link_tab_aria: 'Abrir tab',
+    aria_add_tab_url: 'Añadir URL del tab',
+    aria_edit_tab_url: 'Editar URL del tab',
     nav_dashboard: 'Panel',
     nav_exercises: 'Ejercicios',
     dashboard_title: 'Panel',

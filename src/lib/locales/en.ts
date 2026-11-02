@@ -84,6 +84,8 @@ export const EN = {
     badge_off_chart: 'Off chart',
     error_invalid_url: 'Invalid URL',
     link_tab_aria: 'Open tab',
+    aria_add_tab_url: 'Add a tab URL',
+    aria_edit_tab_url: 'Edit a tab URL',
     nav_dashboard: 'Dashboard',
     nav_exercises: 'Exercises',
     dashboard_title: 'Dashboard',

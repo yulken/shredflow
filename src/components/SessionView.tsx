@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
-import { ArrowLeft, Save, Gauge, History, Activity, Trash2, Clock, TrendingUp } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { ArrowLeft, Save, Gauge, History, Activity, Trash2, Clock, TrendingUp, ExternalLink, Pencil } from 'lucide-react';
 import { supabase, type Exercise, type PracticeSession } from '@/lib/supabase';
 import { t, tp, dateLocale, categoryLabel } from '@/lib/i18n';
 import { tensionLabel, tensionColor } from '@/lib/tension';
 import { bpmStep, realBpm } from '@/lib/bpm';
+import { ProgressChart } from '@/components/ProgressChart';
+import { useDayRollover } from '@/hooks/useDayRollover';
+import { useRefreshOnVisible } from '@/hooks/useRefreshOnVisible';
 
 type Props = {
   exercise: Exercise;
@@ -19,6 +22,10 @@ export function SessionView({ exercise, onBack }: Props) {
   const [saved, setSaved] = useState(false);
   const [sessions, setSessions] = useState<PracticeSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
+  const [tabUrl, setTabUrl] = useState<string | null>(exercise.tab_url);
+  const [editingTab, setEditingTab] = useState(false);
+  const [tabDraft, setTabDraft] = useState('');
+  const [tabError, setTabError] = useState('');
   // Real BPM is bpm × clicks_per_beat, mirroring the Supabase trigger
   // (sync_exercise_bpm_records) so the UI and the DB never disagree.
   const realOf = (session: PracticeSession) => realBpm(session.bpm, session.clicks_per_beat);
@@ -30,29 +37,66 @@ export function SessionView({ exercise, onBack }: Props) {
     { max_bpm: exercise.max_bpm, last_bpm: exercise.last_bpm },
   );
 
-  const fetchSessions = useCallback(async () => {
-    setLoadingHistory(true);
-    const { data, error } = await supabase
-      .from('practice_sessions')
-      .select('*')
-      .eq('exercise_id', exercise.id)
-      .order('created_at', { ascending: false });
-    if (!error) setSessions(data || []);
-    setLoadingHistory(false);
+  // The rows this screen shows are the sessions of one exercise plus the two stats
+  // the trigger writes, so both are re-read together: a session logged on another
+  // device changes the points and the record at once, and reading only one of them
+  // leaves the other's card disagreeing with the chart.
+  const inFlight = useRef(false);
+  const refreshAll = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+    // Two background triggers can land in the same instant - a focus and the
+    // midnight timer. The explicit re-read after a save or a delete always runs:
+    // the row it has to show is the one just written.
+    if (background && inFlight.current) return;
+    inFlight.current = true;
+    // A background refresh keeps the list on screen instead of trading it for the
+    // skeleton, and a failed one leaves the last good rows readable.
+    if (!background) setLoadingHistory(true);
+    const [sessionsRes, statsRes] = await Promise.all([
+      supabase
+        .from('practice_sessions')
+        .select('*')
+        .eq('exercise_id', exercise.id)
+        .order('created_at', { ascending: false }),
+      supabase.from('exercises').select('max_bpm, last_bpm').eq('id', exercise.id).limit(1).maybeSingle(),
+    ]);
+    if (!sessionsRes.error) setSessions(sessionsRes.data || []);
+    if (statsRes.data) setLiveStats({ max_bpm: statsRes.data.max_bpm, last_bpm: statsRes.data.last_bpm });
+    if (!background) setLoadingHistory(false);
+    inFlight.current = false;
   }, [exercise.id]);
 
   useEffect(() => {
-    fetchSessions();
-  }, [fetchSessions]);
+    refreshAll();
+  }, [refreshAll]);
 
-  const refreshLiveStats = async () => {
-    const { data } = await supabase
-      .from('exercises')
-      .select('max_bpm, last_bpm')
-      .eq('id', exercise.id)
-      .limit(1)
-      .maybeSingle();
-    if (data) setLiveStats({ max_bpm: data.max_bpm, last_bpm: data.last_bpm });
+  // The day is the unit a session is logged in, so the day boundary is the refresh
+  // boundary; `useRefreshOnVisible` covers a session logged elsewhere the same day.
+  // `refreshAll` is stable while the exercise is the same, which is what keeps the
+  // midnight the timer was scheduled at.
+  useDayRollover(refreshAll);
+  useRefreshOnVisible(refreshAll);
+
+  // The tab URL is the one column this screen writes; the rest of the exercise row
+  // belongs to the catalog form. Normalized at write time the same way the form
+  // does it, so the link rendered here is a URL that was validated, not typed text.
+  const saveTabUrl = async () => {
+    let value: string | null = null;
+    if (tabDraft.trim()) {
+      try {
+        value = new URL(tabDraft.trim()).href;
+      } catch {
+        setTabError(t('error_invalid_url'));
+        return;
+      }
+    }
+    const { error } = await supabase.from('exercises').update({ tab_url: value }).eq('id', exercise.id);
+    if (error) {
+      setTabError(t('error_update_exercise'));
+      return;
+    }
+    setTabUrl(value);
+    setEditingTab(false);
+    setTabError('');
   };
 
   const handleSave = async () => {
@@ -69,13 +113,12 @@ export function SessionView({ exercise, onBack }: Props) {
       alert(t('error_save_session'));
       return;
     }
-    await refreshLiveStats();
+    await refreshAll();
     setSaved(true);
     setNotes('');
     setTension(2);
     setBpm(60);
     setClicks(1);
-    fetchSessions();
     setTimeout(() => setSaved(false), 2500);
   };
 
@@ -86,7 +129,7 @@ export function SessionView({ exercise, onBack }: Props) {
       alert(t('error_delete_session'));
       return;
     }
-    fetchSessions();
+    refreshAll();
   };
 
   // Stat cards: count and average come from the fetched sessions (client-side
@@ -133,6 +176,84 @@ export function SessionView({ exercise, onBack }: Props) {
               <p className="text-gray-500 dark:text-gray-400 mb-6 text-sm leading-relaxed">
                 {exercise.description}
               </p>
+            )}
+
+            {/* The tab this exercise points at. Nothing stored means nothing to
+                open, so the control offers to store one here rather than sending
+                the user back to the catalog form mid-practice. */}
+            {!editingTab && (
+              <div className="flex items-center gap-2 mb-6">
+                {tabUrl ? (
+                  <>
+                    <a
+                      href={tabUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                      aria-label={t('link_tab_aria')}
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      {t('field_tab_url')}
+                    </a>
+                    <button
+                      onClick={() => {
+                        setTabDraft(tabUrl);
+                        setTabError('');
+                        setEditingTab(true);
+                      }}
+                      className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                      aria-label={t('aria_edit_tab_url')}
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </button>
+                  </>
+                ) : (
+                  <button
+                    onClick={() => {
+                      setTabDraft('');
+                      setTabError('');
+                      setEditingTab(true);
+                    }}
+                    className="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+                    aria-label={t('aria_add_tab_url')}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                    {t('field_tab_url')}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {editingTab && (
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
+                  {t('field_tab_url')}
+                </label>
+                <input
+                  value={tabDraft}
+                  onChange={(e) => setTabDraft(e.target.value)}
+                  placeholder={t('placeholder_tab_url')}
+                  className="w-full px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                />
+                {tabError && <p className="text-xs text-red-500 mt-1.5">{tabError}</p>}
+                <div className="flex items-center gap-2 mt-2">
+                  <button
+                    onClick={saveTabUrl}
+                    className="px-4 py-2 rounded-lg bg-brand-600 hover:bg-brand-700 text-white text-sm font-medium transition-colors active:scale-95"
+                  >
+                    {t('save_button')}
+                  </button>
+                  <button
+                    onClick={() => {
+                      setEditingTab(false);
+                      setTabError('');
+                    }}
+                    className="px-4 py-2 rounded-lg bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 text-sm font-medium hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors active:scale-95"
+                  >
+                    {t('cancel_button')}
+                  </button>
+                </div>
+              </div>
             )}
 
             {/* Stats: sessions / average (Real BPM) / record / last. Record and
@@ -316,7 +437,9 @@ export function SessionView({ exercise, onBack }: Props) {
 
         {/* History */}
         <div className="lg:col-span-2">
-          <div className="card p-6 sticky top-6">
+          {/* Not sticky: the card now carries the chart below the list, and a card
+              pinned at the top never reveals what sits past the fold. */}
+          <div className="card p-6">
             <div className="flex items-center gap-2 mb-5">
               <History className="h-5 w-5 text-gray-400" />
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -433,6 +556,27 @@ export function SessionView({ exercise, onBack }: Props) {
                     </div>
                   );
                 })}
+              </div>
+            )}
+
+            {/* The exercise's own series, same chart as the dashboard. Drawn only
+                once something is logged, so the empty state stays the list's own
+                `no_sessions_yet`; the visibility flag is forced on because it
+                filters the dashboard and this screen is the exercise itself.
+                `compact` keeps the axis readable in a narrow column: half the guide
+                lines, fewer marks, and no legend or axis title - the tooltip already
+                says the day, the BPM and the tension per point. */}
+            {sessions.length > 0 && (
+              <div className="mt-5 pt-5 border-t border-gray-100 dark:border-gray-800">
+                <h2 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">
+                  {t('chart_title')}
+                </h2>
+                <ProgressChart
+                  exercises={[{ ...exercise, dashboard_visible: true }]}
+                  sessions={sessions}
+                  period="all"
+                  compact
+                />
               </div>
             )}
           </div>

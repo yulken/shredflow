@@ -12,7 +12,7 @@ same arithmetic by hand.
 ## What it does
 
 - **Exercise catalog** — CRUD with category, target BPM, description and a tablature link.
-- **Session log** — base BPM, clicks per beat (1 / 2 / 4 / 6), hand tension (1 relaxed → 3 tense), free-form notes. The session date is the day you write it.
+- **Session log** — base BPM, clicks per beat (1 / 2 / 4 / 6), hand tension (1 relaxed → 3 tense), free-form notes. The session date is the day you write it. The exercise's own Real BPM chart and its tab link sit on the same screen, and the link can be stored or edited there.
 - **Dashboard** — a multi-series line chart, one series per exercise, Y = Real BPM, X = the logged day, with `last month / last 3 months / last year / all data` windows.
 - **Chart visibility** — the eye toggle on each row puts that exercise on or off the chart.
 - **Max / Last BPM** — written by a Postgres trigger on every session insert, never by the client.
@@ -78,7 +78,7 @@ sessions against them.
 
 ```
 src/components/   Dashboard, ExerciseList, SessionView, ProgressChart, toggles
-src/hooks/        theme, language, chart period (all persisted in localStorage)
+src/hooks/        theme, language, chart period (the three persisted), day rollover, refresh on visible
 src/lib/          supabase client, i18n + locales, bpm, tension, chart, period, clock
 supabase/         config.toml + migrations
 ```

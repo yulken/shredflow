@@ -36,13 +36,23 @@ const PALETTE = [
   '#84cc16',
 ];
 
+// Guide lines, in one gray for both axes. The quiet variant halves the alpha: the
+// lines still mark the subdivisions the tick unit chose, they just stop competing
+// with the series.
+const GRID = 'rgba(107, 114, 128, 0.12)';
+const GRID_QUIET = 'rgba(107, 114, 128, 0.06)';
+
 type Props = {
   exercises: Exercise[];
   sessions: PracticeSession[];
   period: Period;
+  /** The quiet variant, for a screen that plots one series: no legend, no axis
+   * title, half the guide lines and fewer tick labels. The axis itself stays - the
+   * window and the scale are still read off it, only more discreetly. */
+  compact?: boolean;
 };
 
-export function ProgressChart({ exercises, sessions, period }: Props) {
+export function ProgressChart({ exercises, sessions, period, compact = false }: Props) {
   // One series per exercise with dashboard_visible = true; Y is Real BPM
   // (bpm x clicks_per_beat), matching the DB trigger's arithmetic. The period is a
   // chart-only filter: the catalog's Max/Last stay the stored trigger records.
@@ -105,29 +115,45 @@ export function ProgressChart({ exercises, sessions, period }: Props) {
           // Chart.js draws one grid line per tick, so the unit is what makes the
           // axis mark readable subdivisions: `tickUnit` grows it with the window
           // the control selected, which keeps weekly Sunday lines over a month or
-          // a quarter without leaving 52 of them over a year.
-          time: { unit, stepSize: 1, tooltipFormat: 'PP' },
+          // a quarter without leaving 52 of them over a year. The quiet variant
+          // steps two units at a time, halving the lines and the labels together.
+          time: { unit, stepSize: compact ? 2 : 1, tooltipFormat: 'PP' },
           // No `displayFormats`: the tick callback below formats every label, and
           // `tooltipFormat` is the date-only fallback for anything that formats
           // through the scale instead.
-          grid: { color: 'rgba(107, 114, 128, 0.12)', drawTicks: false },
+          grid: { color: compact ? GRID_QUIET : GRID, drawTicks: false },
           ticks: {
             color: '#9ca3af',
             maxRotation: 0,
             autoSkip: true,
             padding: 8,
+            font: compact ? { size: 10 } : undefined,
             callback: (v) => tickDateLabel(Number(v), dateLocale(), withYear),
           },
         },
         y: {
-          title: { display: true, text: t('chart_y_axis'), color: '#9ca3af' },
+          // The unit name the tooltip already spells for every point, so the quiet
+          // variant drops the title and keeps the numbers: the scale stays readable
+          // without a label repeating what the hover says.
+          title: { display: !compact, text: t('chart_y_axis'), color: '#9ca3af' },
           beginAtZero: true,
-          grid: { color: 'rgba(107, 114, 128, 0.12)' },
-          ticks: { color: '#9ca3af' },
+          grid: { color: compact ? GRID_QUIET : GRID },
+          // A limit here caps ticks and gridlines together, so a narrow column gets
+          // a few readable marks instead of a ladder.
+          ticks: {
+            color: '#9ca3af',
+            font: compact ? { size: 10 } : undefined,
+            maxTicksLimit: compact ? 4 : undefined,
+          },
         },
       },
       plugins: {
         legend: {
+          // The series list is a dashboard thing: a screen that plots one exercise
+          // has nothing to read off it, and its tooltip already names the series.
+          // Turning it off also frees the band Chart.js would reserve here, which is
+          // width a narrow column spends on the plot instead.
+          display: !compact,
           // Lateral, top-aligned: the Y-axis title already sits on the left, so
           // the series list goes right. Vertical stacking keeps the plot wide
           // instead of trading height for a row of 7 labels under the axis.
@@ -160,7 +186,7 @@ export function ProgressChart({ exercises, sessions, period }: Props) {
         },
       },
     };
-  }, [seriesSessions, withYear, unit]);
+  }, [seriesSessions, withYear, unit, compact]);
 
   if (!hasData) {
     return (
