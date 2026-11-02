@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Chart as ChartJS,
   Legend,
@@ -42,6 +42,28 @@ const PALETTE = [
 const GRID = 'rgba(107, 114, 128, 0.12)';
 const GRID_QUIET = 'rgba(107, 114, 128, 0.06)';
 
+// A plot narrower than this trades its legend band for the series: the column of
+// labels on the right eats width a phone does not have. The container is measured,
+// not the viewport, so the rule also holds in a narrow column on a wide screen (the
+// session view's history card is one).
+const NARROW_PX = 480;
+
+/** The wrapper's width, through a `ResizeObserver`: reflowing the legend and the tick
+ * count has to follow the box the chart is actually drawn in, and a CSS media query
+ * would answer the viewport instead. */
+function usePlotWidth() {
+  const ref = useRef<HTMLDivElement>(null);
+  const [width, setWidth] = useState(0);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const observer = new ResizeObserver(([entry]) => setWidth(entry.contentRect.width));
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
+  return { ref, narrow: width > 0 && width < NARROW_PX };
+}
+
 type Props = {
   exercises: Exercise[];
   sessions: PracticeSession[];
@@ -53,6 +75,7 @@ type Props = {
 };
 
 export function ProgressChart({ exercises, sessions, period, compact = false }: Props) {
+  const { ref, narrow } = usePlotWidth();
   // One series per exercise with dashboard_visible = true; Y is Real BPM
   // (bpm x clicks_per_beat), matching the DB trigger's arithmetic. The period is a
   // chart-only filter: the catalog's Max/Last stay the stored trigger records.
@@ -128,6 +151,10 @@ export function ProgressChart({ exercises, sessions, period, compact = false }: 
             autoSkip: true,
             padding: 8,
             font: compact ? { size: 10 } : undefined,
+            // Digit labels (`src/lib/chart.ts`) are short enough that `autoSkip` lets
+            // more of them into a narrow box; the cap is what keeps a phone's axis
+            // readable. A wide plot gets none and still draws every mark the unit chose.
+            maxTicksLimit: narrow ? 5 : undefined,
             callback: (v) => tickDateLabel(Number(v), dateLocale(), withYear),
           },
         },
@@ -154,17 +181,18 @@ export function ProgressChart({ exercises, sessions, period, compact = false }: 
           // Turning it off also frees the band Chart.js would reserve here, which is
           // width a narrow column spends on the plot instead.
           display: !compact,
-          // Lateral, top-aligned: the Y-axis title already sits on the left, so
-          // the series list goes right. Vertical stacking keeps the plot wide
-          // instead of trading height for a row of 7 labels under the axis.
-          position: 'right',
-          align: 'start',
+          // On a wide plot the series list is lateral and top-aligned: the Y-axis
+          // title already occupies the left, so the labels go right and vertical
+          // stacking keeps the plot wide. A narrow plot flips it above the axis, where
+          // the list costs a row of height instead of the width the series needs.
+          position: narrow ? 'top' : 'right',
+          align: narrow ? 'center' : 'start',
           labels: {
             color: '#6b7280',
             usePointStyle: true,
             boxWidth: 8,
-            padding: 10,
-            font: { size: 11 },
+            padding: narrow ? 6 : 10,
+            font: narrow ? { size: 10 } : { size: 11 },
           },
         },
         tooltip: {
@@ -186,7 +214,7 @@ export function ProgressChart({ exercises, sessions, period, compact = false }: 
         },
       },
     };
-  }, [seriesSessions, withYear, unit, compact]);
+  }, [seriesSessions, withYear, unit, compact, narrow]);
 
   if (!hasData) {
     return (
@@ -198,8 +226,14 @@ export function ProgressChart({ exercises, sessions, period, compact = false }: 
     );
   }
 
+  // Shorter on a phone: the legend moved above the axis, and a 360px-tall plot on a
+  // 640px-tall screen leaves nothing of the page below it. Desktop keeps its height.
+  // `min-w-0`: the canvas carries an intrinsic (attribute) width, so its min-content
+  // is what an implicit grid column cannot shrink below - the session view's history
+  // column is one below `lg`, and without this the chart holds the page wider than
+  // the phone and the whole screen drags sideways.
   return (
-    <div className="h-[360px]">
+    <div ref={ref} className="min-w-0 h-[260px] sm:h-[360px]">
       <Line data={chartData} options={options} />
     </div>
   );

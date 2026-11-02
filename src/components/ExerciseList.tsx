@@ -58,9 +58,9 @@ export function ExerciseList({ onSelectExercise }: Props) {
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center justify-between mb-8">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
+      <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
+        <div className="min-w-0">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
             {t('exercises_title')}
           </h1>
           <p className="text-gray-500 dark:text-gray-400 mt-1">
@@ -69,7 +69,7 @@ export function ExerciseList({ onSelectExercise }: Props) {
         </div>
         <button
           onClick={() => { setEditingExercise(null); setShowForm(true); }}
-          className="flex items-center gap-2 px-5 py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium shadow-lg shadow-brand-600/20 transition-all hover:scale-105 active:scale-95"
+          className="flex shrink-0 items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium shadow-lg shadow-brand-600/20 transition-all hover:scale-105 active:scale-95"
         >
           <Plus className="h-5 w-5" />
           {t('new_exercise_button')}
@@ -85,7 +85,7 @@ export function ExerciseList({ onSelectExercise }: Props) {
           ))}
         </div>
       ) : exercises.length === 0 ? (
-        <div className="card p-12 text-center animate-scale-in">
+        <div className="card p-8 sm:p-12 text-center animate-scale-in">
           <div className="inline-flex items-center justify-center h-16 w-16 rounded-2xl bg-brand-100 dark:bg-brand-900/30 text-brand-500 mb-4">
             <Music2 className="h-8 w-8" />
           </div>
@@ -106,9 +106,11 @@ export function ExerciseList({ onSelectExercise }: Props) {
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {exercises.map((exercise, idx) => (
+            // Hover effects only where hovering is a real input: on touch, `:hover`
+            // sticks after the tap and the card would stay lifted.
             <div
               key={exercise.id}
-              className="card p-5 group hover:shadow-md transition-all hover:-translate-y-0.5 animate-fade-in cursor-pointer"
+              className="card p-4 sm:p-5 group transition-all animate-fade-in cursor-pointer active:scale-[0.99] [@media(hover:hover)]:hover:shadow-md [@media(hover:hover)]:hover:-translate-y-0.5"
               style={{ animationDelay: `${idx * 50}ms` }}
               onClick={() => onSelectExercise(exercise)}
             >
@@ -116,17 +118,20 @@ export function ExerciseList({ onSelectExercise }: Props) {
                 <div className="inline-flex items-center justify-center h-11 w-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-md">
                   <Music2 className="h-5 w-5" />
                 </div>
-                <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                {/* Visible wherever there is no hover to reveal them - edit and delete
+                    are the only way to change or remove an exercise, so a hover-only
+                    pair is unreachable on a phone. */}
+                <div className="flex gap-2 transition-opacity [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100">
                   <button
                     onClick={(e) => { e.stopPropagation(); setEditingExercise(exercise); setShowForm(true); }}
-                    className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors"
+                    className="relative h-9 w-9 rounded-lg flex items-center justify-center text-gray-400 hover:text-brand-500 hover:bg-brand-50 dark:hover:bg-brand-900/20 transition-colors active:scale-95 before:absolute before:-inset-[2px] before:content-['']"
                     aria-label={t('tooltip_edit')}
                   >
                     <Pencil className="h-4 w-4" />
                   </button>
                   <button
                     onClick={(e) => { e.stopPropagation(); handleDelete(exercise.id); }}
-                    className="h-8 w-8 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    className="relative h-9 w-9 rounded-lg flex items-center justify-center text-gray-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors active:scale-95 before:absolute before:-inset-[2px] before:content-['']"
                     aria-label={t('tooltip_delete')}
                   >
                     <Trash2 className="h-4 w-4" />
@@ -143,7 +148,10 @@ export function ExerciseList({ onSelectExercise }: Props) {
                 </p>
               )}
 
-              <div className="flex items-center gap-2 mb-3">
+              {/* Two rows of chips, both wrapping: at 360px a single line of goal +
+                  max + last + session count overflows the card and drags the page
+                  sideways, and a tab link beside an off-chart badge does the same. */}
+              <div className="flex flex-wrap items-center gap-2 mb-3">
                 {exercise.tab_url && (
                   <a
                     href={exercise.tab_url}
@@ -165,7 +173,7 @@ export function ExerciseList({ onSelectExercise }: Props) {
                 )}
               </div>
 
-              <div className="flex items-center gap-3 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                 {exercise.category && (
                   <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
                     {categoryLabel(exercise.category)}
@@ -275,7 +283,7 @@ function ExerciseForm({
         className="absolute inset-0 bg-black/40 backdrop-blur-sm animate-fade-in"
         onClick={onClose}
       />
-      <div className="relative w-full sm:max-w-lg card rounded-t-3xl sm:rounded-3xl p-6 max-h-[90vh] overflow-y-auto animate-slide-up sm:animate-scale-in">
+      <div className="relative w-full sm:max-w-lg card rounded-t-3xl sm:rounded-3xl p-5 sm:p-6 max-h-[90vh] overflow-y-auto animate-slide-up sm:animate-scale-in">
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-gray-900 dark:text-white">
             {exercise ? t('form_title_edit') : t('form_title_new')}

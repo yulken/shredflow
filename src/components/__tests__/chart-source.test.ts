@@ -42,12 +42,22 @@ describe('the palette position survives a visibility change', () => {
   });
 });
 
-describe('the legend sits beside the plot', () => {
-  test('it is lateral and top-aligned, not above the axis', () => {
+describe('the legend follows the width the plot is drawn in', () => {
+  test('a wide plot keeps it lateral and top-aligned', () => {
     // The Y-axis title already occupies the left, so the series list goes right;
     // vertical stacking keeps the plot wide instead of trading height for a row.
-    expect(chart).toContain("position: 'right'");
-    expect(chart).toContain("align: 'start'");
+    expect(chart).toMatch(/position: narrow \? 'top' : 'right'/);
+    expect(chart).toMatch(/align: narrow \? 'center' : 'start'/);
+    // No unconditional position: on a phone the list would eat width the series need.
+    expect(chart).not.toMatch(/position: 'right'/);
+  });
+
+  test('the width is measured, not guessed from the viewport', () => {
+    // A narrow column on a wide screen is narrow for the chart too (the session
+    // view's history card is one), and a CSS media query answers the viewport.
+    expect(chart).toContain('const NARROW_PX = 480');
+    expect(chart).toMatch(/new ResizeObserver\(/);
+    expect(chart).toMatch(/width > 0 && width < NARROW_PX/);
   });
 
   test('whether it is drawn is the caller\'s', () => {
@@ -55,6 +65,22 @@ describe('the legend sits beside the plot', () => {
     // plots one exercise does not. Off at the caller, not off here.
     expect(chart).toMatch(/compact = false/);
     expect(chart).toMatch(/display: !compact/);
+  });
+});
+
+describe('a narrow plot caps its labels and its height', () => {
+  test('the X axis stops packing labels', () => {
+    // Digit labels are short enough that `autoSkip` lets more of them into a phone's
+    // box. A wide plot gets no cap and still draws every mark the unit chose.
+    expect(chart).toMatch(/maxTicksLimit: narrow \? 5 : undefined/);
+    expect(chart).not.toMatch(/maxTicksLimit: 5\b/);
+  });
+
+  test('the plot is shorter there, and the skeleton matches', () => {
+    // The legend moved above the axis, so a 360px plot on a 640px screen would leave
+    // nothing of the page below it. Desktop keeps the height it has always drawn.
+    expect(chart).toContain('h-[260px] sm:h-[360px]');
+    expect(dashboard).toContain('h-[260px] sm:h-[360px]');
   });
 });
 
@@ -214,6 +240,30 @@ describe('the eye in the catalog writes dashboard_visible', () => {
     // database never accepted.
     expect(/apply\(exercise\.dashboard_visible\)/.test(dashboard)).toBe(true);
     expect(dashboard).toContain("t('error_update_exercise')");
+  });
+});
+
+describe('the catalog answers two widths', () => {
+  test('at sm and up it is the table criterion 2 asks for', () => {
+    // Header, four columns, the same rows: the tabular view stays on every width
+    // that fits it.
+    expect(dashboard).toContain('hidden sm:block');
+    expect(dashboard).toContain('<table className="w-full text-sm">');
+    expect(dashboard).toContain("t('catalog_col_visible')");
+  });
+
+  test('below sm the same rows stack instead of dragging sideways', () => {
+    // Four columns inside 360px scroll the card horizontally; the stacked shape
+    // names the exercise and shows the two stored records as chips instead.
+    expect(dashboard).toContain('sm:hidden divide-y');
+    expect(dashboard).toContain("t('stat_max_bpm')");
+    expect(dashboard).toContain("t('stat_last_bpm')");
+  });
+
+  test('the eye is one control serving both shapes', () => {
+    // Two hosts, one implementation: a second copy would drift from the write and
+    // from the hit area the touch tests pin.
+    expect(dashboard.match(/<EyeCell /g)?.length).toBe(2);
   });
 });
 

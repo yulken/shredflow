@@ -152,10 +152,16 @@ export function SessionView({ exercise, onBack }: Props) {
         {t('back_to_exercises')}
       </button>
 
-      <div className="grid gap-6 lg:grid-cols-5">
+      {/* `grid-cols-1` is not decorative: without an explicit base template the
+          implicit column track is `auto`, whose floor is the card's min-content -
+          and the chart canvas carries an intrinsic width (Chart.js sets it in px),
+          so the track could never shrink below ~540px and the phone page dragged
+          sideways. Tailwind's `grid-cols-1` is minmax(0, 1fr): a track that can
+          shrink, which is what lets the canvas resize instead of holding the page. */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         {/* Session form + stats */}
         <div className="lg:col-span-3 space-y-6">
-          <div className="card p-6">
+          <div className="card p-4 sm:p-6">
             <div className="flex items-start gap-4 mb-6">
               <div className="inline-flex items-center justify-center h-12 w-12 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-md shrink-0">
                 <Gauge className="h-6 w-6" />
@@ -189,7 +195,7 @@ export function SessionView({ exercise, onBack }: Props) {
                       href={tabUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
+                      className="flex items-center gap-1 py-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
                       aria-label={t('link_tab_aria')}
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
@@ -201,7 +207,7 @@ export function SessionView({ exercise, onBack }: Props) {
                         setTabError('');
                         setEditingTab(true);
                       }}
-                      className="text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 transition-colors"
+                      className="h-9 w-9 rounded-lg flex items-center justify-center text-gray-400 hover:text-gray-700 dark:hover:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors active:scale-95"
                       aria-label={t('aria_edit_tab_url')}
                     >
                       <Pencil className="h-3.5 w-3.5" />
@@ -214,7 +220,7 @@ export function SessionView({ exercise, onBack }: Props) {
                       setTabError('');
                       setEditingTab(true);
                     }}
-                    className="flex items-center gap-1 text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 transition-colors"
+                    className="flex items-center gap-1 px-2 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:text-brand-600 dark:hover:text-brand-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors active:scale-95"
                     aria-label={t('aria_add_tab_url')}
                   >
                     <Pencil className="h-3.5 w-3.5" />
@@ -326,11 +332,15 @@ export function SessionView({ exercise, onBack }: Props) {
                 >
                   {'\u22121'}
                 </button>
+                {/* `min-w-0`: a number input carries an intrinsic width (the default
+                    `size` of 20 characters), and at text-2xl that is ~386px of
+                    min-content - the row would hold the phone page wider than the
+                    screen. With the floor removed, flex-1 shrinks it to fit. */}
                 <input
                   type="number"
                   value={bpm}
                   onChange={(e) => setBpm(Math.max(1, parseInt(e.target.value, 10) || 0))}
-                  className="flex-1 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
+                  className="min-w-0 flex-1 px-4 py-3 rounded-xl bg-gray-50 dark:bg-gray-800 border border-gray-200 dark:border-gray-700 text-gray-900 dark:text-white text-center text-2xl font-bold focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent transition-all"
                 />
                 <button
                   onClick={() => setBpm((b) => bpmStep(b, 1))}
@@ -439,7 +449,7 @@ export function SessionView({ exercise, onBack }: Props) {
         <div className="lg:col-span-2">
           {/* Not sticky: the card now carries the chart below the list, and a card
               pinned at the top never reveals what sits past the fold. */}
-          <div className="card p-6">
+          <div className="card p-4 sm:p-6">
             <div className="flex items-center gap-2 mb-5">
               <History className="h-5 w-5 text-gray-400" />
               <h2 className="text-lg font-semibold text-gray-900 dark:text-white">
@@ -466,7 +476,9 @@ export function SessionView({ exercise, onBack }: Props) {
                 </p>
               </div>
             ) : (
-              <div className="space-y-3 max-h-[600px] overflow-y-auto pr-1">
+              // No inner scroll below `sm`: a box that scrolls inside the page traps a
+              // finger's swipe, and on a phone the whole page is the scroll.
+              <div className="space-y-3 sm:max-h-[600px] sm:overflow-y-auto sm:pr-1">
                 {sessions.map((session, idx) => {
                   const date = new Date(session.created_at);
                   const dateStr = date.toLocaleDateString(dateLocale(), {
@@ -488,9 +500,13 @@ export function SessionView({ exercise, onBack }: Props) {
                       className="group relative p-4 rounded-xl bg-gray-50 dark:bg-gray-800/50 border border-gray-100 dark:border-gray-800 hover:border-brand-200 dark:hover:border-brand-900 transition-colors animate-fade-in"
                       style={{ animationDelay: `${idx * 40}ms` }}
                     >
+                      {/* Always visible where a finger is the only input: a hover-reveal
+                          trash can never be reached on touch, and deleting a session is a
+                          row action like opening it. The pseudo-element carries the tap
+                          area past the 36px chip. */}
                       <button
                         onClick={() => handleDeleteSession(session.id)}
-                        className="absolute top-2 right-2 h-7 w-7 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 opacity-0 group-hover:opacity-100 transition-all"
+                        className="absolute top-2 right-2 h-9 w-9 rounded-lg flex items-center justify-center text-gray-300 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-all active:scale-95 before:absolute before:-inset-[6px] before:content-[''] [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100"
                         aria-label={t('aria_delete_session')}
                       >
                         <Trash2 className="h-3.5 w-3.5" />

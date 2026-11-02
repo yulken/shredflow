@@ -26,7 +26,7 @@ export default function App() {
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-300">
       {/* Top bar */}
       <header className="sticky top-0 z-40 glass">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between">
+        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
           <button
             onClick={() => { setListView('dashboard'); setSelectedExercise(null); }}
             className="flex items-center gap-2.5 group"
@@ -34,15 +34,15 @@ export default function App() {
             <div className="inline-flex items-center justify-center h-9 w-9 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-md shadow-brand-600/20 group-hover:scale-105 transition-transform">
               <Guitar className="h-5 w-5" />
             </div>
-            <span className="text-lg font-bold text-gray-900 dark:text-white tracking-tight">
+            <span className="text-base sm:text-lg font-bold text-gray-900 dark:text-white tracking-tight">
               {t('app_brand')}
             </span>
           </button>
           <div className="flex items-center gap-2">
-            <nav className="flex items-center gap-1 mr-2">
+            <nav className="flex items-center gap-1 mr-1 sm:mr-2">
               <button
                 onClick={() => { setListView('dashboard'); setSelectedExercise(null); }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   listView === 'dashboard' && !selectedExercise
                     ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -53,7 +53,7 @@ export default function App() {
               </button>
               <button
                 onClick={() => { setListView('exercises'); setSelectedExercise(null); }}
-                className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
+                className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                   listView === 'exercises' && !selectedExercise
                     ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
                     : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -70,7 +70,7 @@ export default function App() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         {selectedExercise ? (
           <SessionView
             exercise={selectedExercise}
@@ -84,7 +84,7 @@ export default function App() {
       </main>
 
       {/* Footer */}
-      <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-8">
+      <footer className="max-w-6xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
         <p className="text-center text-xs text-gray-400 dark:text-gray-600">
           {t('footer_tagline')}
         </p>

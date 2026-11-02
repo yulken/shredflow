@@ -93,7 +93,7 @@ export function Dashboard({ onSelectExercise }: Props) {
         <p className="text-gray-500 dark:text-gray-400 mt-1">{t('dashboard_subtitle')}</p>
       </div>
 
-      <div className="card p-6">
+      <div className="card p-4 sm:p-6">
         <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
           <div className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5 text-gray-400" />
@@ -122,7 +122,7 @@ export function Dashboard({ onSelectExercise }: Props) {
           </div>
         </div>
         {loading ? (
-          <div className="h-[360px] rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+          <div className="h-[260px] sm:h-[360px] rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
         ) : (
           <ProgressChart exercises={exercises} sessions={sessions} period={period} />
         )}
@@ -130,79 +130,122 @@ export function Dashboard({ onSelectExercise }: Props) {
 
       {error && <p className="text-sm text-brand-600 dark:text-brand-400">{error}</p>}
 
-      <div className="card p-6 overflow-x-auto">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="text-left text-xs font-medium text-gray-400 dark:text-gray-500">
-              <th className="py-2 pr-4">{t('catalog_col_exercise')}</th>
-              <th className="py-2 pr-4 text-right">{t('catalog_col_max')}</th>
-              <th className="py-2 pr-4 text-right">{t('catalog_col_last')}</th>
-              <th className="py-2 text-right">{t('catalog_col_visible')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            {loading ? (
-              <tr>
-                <td colSpan={4} className="py-6">
-                  <div className="h-10 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
-                </td>
-              </tr>
-            ) : exercises.length === 0 ? (
-              <tr>
-                <td colSpan={4} className="py-6 text-center text-gray-400 dark:text-gray-500">
-                  {t('no_exercises_title')}
-                </td>
-              </tr>
-            ) : (
-              exercises.map((exercise) => (
-                <tr
+      {/* The catalog in two shapes. The table is the tabular view criterion 2 asks
+          for; below `sm` its four columns do not fit a phone and drag sideways, so
+          the same rows stack instead. The eye is one control written once (`EyeCell`),
+          because both shapes host it. */}
+      <div className="card p-4 sm:p-6 overflow-x-auto">
+        {loading ? (
+          <div className="h-10 rounded-xl bg-gray-100 dark:bg-gray-800 animate-pulse" />
+        ) : exercises.length === 0 ? (
+          <p className="py-6 text-center text-gray-400 dark:text-gray-500">{t('no_exercises_title')}</p>
+        ) : (
+          <>
+            <div className="hidden sm:block">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-xs font-medium text-gray-400 dark:text-gray-500">
+                    <th className="py-2 pr-4">{t('catalog_col_exercise')}</th>
+                    <th className="py-2 pr-4 text-right">{t('catalog_col_max')}</th>
+                    <th className="py-2 pr-4 text-right">{t('catalog_col_last')}</th>
+                    <th className="py-2 text-right">{t('catalog_col_visible')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {exercises.map((exercise) => (
+                    <tr
+                      key={exercise.id}
+                      onClick={() => onSelectExercise(exercise)}
+                      className="cursor-pointer border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                    >
+                      {/* Title and nothing else: the tab lives on the exercise's own
+                          screen, which shows the link and edits it, and this row is the
+                          way there. A link here would float mid-line beside the title and
+                          need its own click guard against the row's navigation. */}
+                      <td className="py-3 pr-4">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Music2 className="h-4 w-4 text-brand-500 shrink-0" />
+                          <span className="font-medium text-gray-900 dark:text-white line-clamp-1">
+                            {exercise.title}
+                          </span>
+                        </div>
+                      </td>
+                      <td className="py-3 pr-4 text-right font-semibold text-gray-900 dark:text-white">
+                        {exercise.max_bpm ?? '\u2014'}
+                      </td>
+                      <td className="py-3 pr-4 text-right font-semibold text-gray-900 dark:text-white">
+                        {exercise.last_bpm ?? '\u2014'}
+                      </td>
+                      <td className="py-3 text-right">
+                        <EyeCell exercise={exercise} toggleOnChart={toggleOnChart} />
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Stacked: the name leads, the two stored records sit under it as chips
+                (`stat_max_bpm` / `stat_last_bpm`, the same words the cards use), and the
+                eye stays at the right edge where a thumb reaches it. */}
+            <ul className="sm:hidden divide-y divide-gray-100 dark:divide-gray-800">
+              {exercises.map((exercise) => (
+                <li
                   key={exercise.id}
                   onClick={() => onSelectExercise(exercise)}
-                  className="cursor-pointer border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+                  className="flex items-center gap-3 py-3 cursor-pointer active:scale-95 transition-colors"
                 >
-                  {/* Title and nothing else: the tab lives on the exercise's own
-                      screen, which shows the link and edits it, and this row is the
-                      way there. A link here would float mid-line beside the title and
-                      need its own click guard against the row's navigation. */}
-                  <td className="py-3 pr-4">
-                    <div className="flex items-center gap-2 min-w-0">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2">
                       <Music2 className="h-4 w-4 text-brand-500 shrink-0" />
                       <span className="font-medium text-gray-900 dark:text-white line-clamp-1">
                         {exercise.title}
                       </span>
                     </div>
-                  </td>
-                  <td className="py-3 pr-4 text-right font-semibold text-gray-900 dark:text-white">
-                    {exercise.max_bpm ?? '\u2014'}
-                  </td>
-                  <td className="py-3 pr-4 text-right font-semibold text-gray-900 dark:text-white">
-                    {exercise.last_bpm ?? '\u2014'}
-                  </td>
-                  <td className="py-3 text-right">
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        void toggleOnChart(exercise);
-                      }}
-                      aria-pressed={exercise.dashboard_visible}
-                      aria-label={exercise.dashboard_visible ? t('visibility_hide') : t('visibility_show')}
-                      title={exercise.dashboard_visible ? t('visibility_hide') : t('visibility_show')}
-                      className={`inline-flex items-center justify-center h-6 w-6 rounded-lg transition-colors active:scale-95 ${
-                        exercise.dashboard_visible
-                          ? 'text-accent-600 dark:text-accent-400 bg-accent-100 dark:bg-accent-900/30 hover:bg-accent-200 dark:hover:bg-accent-900/50'
-                          : 'text-gray-400 bg-gray-100 dark:bg-gray-800 hover:text-accent-500 dark:hover:text-accent-400'
-                      }`}
-                    >
-                      {exercise.dashboard_visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
-                    </button>
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                    <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
+                      <span>{t('stat_max_bpm')} · {exercise.max_bpm ?? '\u2014'}</span>
+                      <span>{t('stat_last_bpm')} · {exercise.last_bpm ?? '\u2014'}</span>
+                    </div>
+                  </div>
+                  <EyeCell exercise={exercise} toggleOnChart={toggleOnChart} />
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
       </div>
     </div>
+  );
+}
+
+// The eye has two hosts (a table cell and a stacked row), so it is written once.
+// The chip stays 24px on screen, but a pseudo-element extends its touch area by
+// 10px on every side: 24px is a miss under a finger, and the row underneath it is
+// the thing that navigates on the same tap.
+function EyeCell({
+  exercise,
+  toggleOnChart,
+}: {
+  exercise: Exercise;
+  toggleOnChart: (exercise: Exercise) => Promise<void>;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={(e) => {
+        e.stopPropagation();
+        void toggleOnChart(exercise);
+      }}
+      aria-pressed={exercise.dashboard_visible}
+      aria-label={exercise.dashboard_visible ? t('visibility_hide') : t('visibility_show')}
+      title={exercise.dashboard_visible ? t('visibility_hide') : t('visibility_show')}
+      className={`relative inline-flex items-center justify-center h-6 w-6 rounded-lg transition-colors active:scale-95 before:absolute before:-inset-[10px] before:content-[''] ${
+        exercise.dashboard_visible
+          ? 'text-accent-600 dark:text-accent-400 bg-accent-100 dark:bg-accent-900/30 hover:bg-accent-200 dark:hover:bg-accent-900/50'
+          : 'text-gray-400 bg-gray-100 dark:bg-gray-800 hover:text-accent-500 dark:hover:text-accent-400'
+      }`}
+    >
+      {exercise.dashboard_visible ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+    </button>
   );
 }
