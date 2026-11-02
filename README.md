@@ -11,6 +11,7 @@ same arithmetic by hand.
 
 ## What it does
 
+- **Sign in** — email + password: create an account, sign out from the header. The catalog and the session log belong to the account that wrote them.
 - **Exercise catalog** — CRUD with category, target BPM, description and a tablature link.
 - **Session log** — base BPM, clicks per beat (1 / 2 / 4 / 6), hand tension (1 relaxed → 3 tense), free-form notes. The session date is the day you write it. The exercise's own Real BPM chart and its tab link sit on the same screen, and the link can be stored or edited there.
 - **Dashboard** — a multi-series line chart, one series per exercise, Y = Real BPM, X = the logged day, with `last month / last 3 months / last year / all data` windows.
@@ -59,9 +60,13 @@ Then run the app:
 npm run dev           # http://localhost:5173
 ```
 
-`npx supabase db reset` rebuilds the database from the migrations. The repo ships
-no seed data, so a fresh database starts empty — add exercises in the UI and log
-sessions against them.
+The repo ships no seed data, so a fresh database starts empty — add exercises in
+the UI and log sessions against them.
+
+Once the database holds data, apply new migrations with `npx supabase migration
+up`. `npx supabase db reset` rebuilds the database from scratch and drops every
+row you have logged, including the pre-auth log that `claim_legacy_rows()` would
+otherwise move under your account.
 
 ### Scripts
 
@@ -77,15 +82,17 @@ sessions against them.
 ## Project structure
 
 ```
-src/components/   Dashboard, ExerciseList, SessionView, ProgressChart, toggles
-src/hooks/        theme, language, chart period (the three persisted), day rollover, refresh on visible
-src/lib/          supabase client, i18n + locales, bpm, tension, chart, period, clock
+src/components/   Dashboard, ExerciseList, SessionView, ProgressChart, toggles, AuthView
+src/hooks/        theme, language, chart period (the three persisted), day rollover, refresh on visible, auth session
+src/lib/          supabase client, auth, i18n + locales, bpm, tension, chart, period, clock
 supabase/         config.toml + migrations
 ```
 
 ## Notes
 
-- **No sign-in.** The app is single-tenant: RLS policies grant full CRUD to `anon`
-  and `authenticated`, so anyone holding the URL and anon key can read and write the
-  data. Fine for a local tool; don't publish it with real data.
+- **Sign in.** Email + password, one account per person. Rows carry a `user_id`, and
+  the RLS policies key every read and write on `auth.uid() = user_id`, so a signed-out
+  visitor reaches only the sign-in screen — the anon key grants no table access. The
+  log written before sign-in existed has no owner; whoever signs in first claims it
+  (`claim_legacy_rows()`), which is the intent for a single-owner tool.
 - The spec, and the deliberate deviations from it, are in [requirements.md](requirements.md).

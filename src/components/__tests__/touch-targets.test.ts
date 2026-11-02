@@ -13,6 +13,7 @@ const list = readFileSync(fileURLToPath(new URL('../ExerciseList.tsx', import.me
 const view = readFileSync(fileURLToPath(new URL('../SessionView.tsx', import.meta.url)), 'utf8');
 const chart = readFileSync(fileURLToPath(new URL('../ProgressChart.tsx', import.meta.url)), 'utf8');
 const langToggle = readFileSync(fileURLToPath(new URL('../LanguageToggle.tsx', import.meta.url)), 'utf8');
+const authView = readFileSync(fileURLToPath(new URL('../AuthView.tsx', import.meta.url)), 'utf8');
 
 describe('nothing is reachable only by hovering', () => {
   test('the reveal is behind a hover-capability query', () => {
@@ -101,5 +102,26 @@ describe('the page scrolls once', () => {
     expect(dashboard).toContain('card p-4 sm:p-6');
     expect(view).toContain('card p-4 sm:p-6');
     expect(list).toContain('card p-4 sm:p-5');
+  });
+});
+
+describe('the sign-in card fits a phone', () => {
+  test('its controls are finger-sized and its inputs shrink', () => {
+    // The gate is the first screen a phone visitor meets, so it gets the same two
+    // rules the rest of the tree does: a tap target a finger can hit, and no
+    // intrinsic width pushing the page sideways.
+    expect(authView).toContain('px-3 py-2.5 sm:py-3');
+    expect(authView).toContain('px-4 py-3');
+    expect(authView).toContain('px-5 py-3');
+    expect(authView).toContain('w-full min-w-0 px-4 py-3');
+    expect(authView).toContain('max-w-md mx-auto');
+    expect(authView).toContain('card p-4 sm:p-6');
+  });
+
+  test('nothing on it is reachable only by hovering', () => {
+    // Both modes are always visible: there is no reveal to hide behind a hover,
+    // and the press feedback is `active`, which a tap answers.
+    expect(authView).not.toMatch(/opacity-0 group-hover:opacity-100/);
+    expect(authView).toContain('active:scale-95');
   });
 });

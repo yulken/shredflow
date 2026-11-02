@@ -513,3 +513,43 @@ Phase C, where the derived fallback there stays only for pre-migration rows.
   - **The old remote Supabase project is retired.** It will not be used again, so the wider `1..10`
     tension CHECK it still holds needs no follow-up migration or clamp; the local database, reset from
     zero, is the environment the app runs against.
+- **2026-11-02 Auth: sign up + sign in** ✅ — one account per person, scope decided by Caio: email +
+  password (`signUp` / `signInWithPassword`), per-user isolation, the legacy log claimed by the first
+  account, UI scope = the auth screen + header sign-out (no password reset, no email confirmation, no
+  password change).
+  - `supabase/migrations/20261102150000_add_user_ownership.sql`: nullable `user_id` on both tables
+    (`REFERENCES auth.users(id) ON DELETE CASCADE`) + an index per table; the eight `anon_*` policies
+    are dropped and eight `owner_*` policies `TO authenticated` replace them — writes
+    `auth.uid() = user_id`, reads also carry `user_id IS NULL` so the inherited log stays visible
+    before the claim; `anon` revoked (DML and the RPC grant) on both tables; `claim_legacy_rows()`
+    (the file's only SECURITY DEFINER, guarded `IF auth.uid() IS NULL`) moves the ownerless rows. The
+    BPM trigger stays SECURITY INVOKER, so its UPDATE is filtered by RLS. Re-runnable: every
+    statement guarded, `owner_*` drops included.
+  - Found while applying it: no app insert sent `user_id`, so `WITH CHECK (auth.uid() = user_id)`
+    refused every create (REST `42501`). Fixed in the schema, not the client: `stamp_owner()` is a
+    BEFORE INSERT trigger on both tables setting `NEW.user_id := auth.uid()` — a signed-in write
+    passes the policy and cannot stamp another account; outside a request the row stays NULL for the
+    claim. `update_exercise_bpm_records` still writes `max_bpm`/`last_bpm` under the new RLS.
+  - `src/lib/auth.ts`: `MIN_PASSWORD_LENGTH` mirrors `minimum_password_length` in `config.toml`;
+    `describeError` maps the Supabase codes (`user_already_exists`, `invalid_credentials`,
+    `invalid_email`, `weak_password`) to dictionary keys — codes read before the message patterns, so
+    the backend's English never reaches the tree; `needsConfirmation` is read off `data.session`.
+    `src/hooks/useAuth.ts`: `{ session, ready, signIn, signUp, signOut }`, the claim awaited once per
+    account before `ready` (the views fetch on mount), reset on sign-out, a `null` first event ignored
+    until the stored session is read back.
+  - `src/components/AuthView.tsx` (sign-in / sign-up card, one shared form, segmented mode pair) and
+    the gate in `App.tsx`: skeleton until `ready` → the card with no session → the three views; the
+    nav and sign-out sit inside `{session && (`, theme and language toggles outside it. 23 keys added
+    to all three dictionaries, none introducing a placeholder.
+  - `supabase/config.toml`: `site_url = http://localhost:5173` + redirect list; email confirmations
+    stay off, so a signup returns a session at once (local stack has no SMTP).
+  - Applied to the local database with `npx supabase migration up` — not `db reset`, which would drop
+    the logged rows. Verified against the live stack: anon REST read → `42501 permission denied`;
+    signup → session immediately; `claim_legacy_rows()` → 57 moved, re-run → 0; second account saw an
+    empty catalog, created an exercise (owner stamped by the trigger) and a session, and the BPM
+    trigger wrote `max_bpm`/`last_bpm` = 360 on that row; the first account saw none of the second's
+    rows. Test accounts were then deleted and the 57 rows returned to ownerless, so Caio's first real
+    signup inherits the legacy log.
+  - `eslint`, `tsc --noEmit` clean; `vitest` 198 passed (14 files), incl. `auth.test.ts`,
+    `auth-schema.test.ts`, `auth-source.test.ts` and the phone-fit claims in `touch-targets.test.ts`.
+    The browser pass (sign up, sign out, 320px card) is Caio's.

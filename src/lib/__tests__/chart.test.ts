@@ -8,6 +8,7 @@ const LOCALES = ['en-US', 'pt-BR', 'es-ES'];
 
 const session = (created_at: string): PracticeSession => ({
   id: 's1',
+  user_id: null,
   exercise_id: 'e1',
   tension_level: 2,
   bpm: 100,

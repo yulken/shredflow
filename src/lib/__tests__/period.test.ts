@@ -12,6 +12,7 @@ const NOW = new Date('2026-10-31T12:00:00Z');
 
 const session = (created_at: string): PracticeSession => ({
   id: 's1',
+  user_id: null,
   exercise_id: 'e1',
   tension_level: 2,
   bpm: 100,
