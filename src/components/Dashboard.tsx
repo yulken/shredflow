@@ -160,24 +160,16 @@ export function Dashboard({ onSelectExercise }: Props) {
                   onClick={() => onSelectExercise(exercise)}
                   className="cursor-pointer border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
                 >
+                  {/* Title and nothing else: the tab lives on the exercise's own
+                      screen, which shows the link and edits it, and this row is the
+                      way there. A link here would float mid-line beside the title and
+                      need its own click guard against the row's navigation. */}
                   <td className="py-3 pr-4">
                     <div className="flex items-center gap-2 min-w-0">
                       <Music2 className="h-4 w-4 text-brand-500 shrink-0" />
                       <span className="font-medium text-gray-900 dark:text-white line-clamp-1">
                         {exercise.title}
                       </span>
-                      {exercise.tab_url && (
-                        <a
-                          href={exercise.tab_url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="text-xs text-brand-600 dark:text-brand-400 hover:underline shrink-0"
-                          aria-label={t('link_tab_aria')}
-                        >
-                          {t('field_tab_url')}
-                        </a>
-                      )}
                     </div>
                   </td>
                   <td className="py-3 pr-4 text-right font-semibold text-gray-900 dark:text-white">

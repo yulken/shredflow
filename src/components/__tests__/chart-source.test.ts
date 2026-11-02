@@ -152,6 +152,13 @@ describe('the period control filters points, not records', () => {
     expect(dashboard).not.toMatch(/\.gte\(|\.lt\(|\.range\(/);
   });
 
+  test('the catalog row carries no tab link', () => {
+    // The row navigates to the exercise's own screen, which shows the link and
+    // edits it; repeating it here put a second brand-red thing beside the title,
+    // floating between the name and the numbers, and needed its own click guard.
+    expect(dashboard).not.toMatch(/tab_url|field_tab_url|link_tab_aria/);
+  });
+
   test('the control is a group of four buttons, and writes nothing', () => {
     expect(dashboard).toMatch(/role="group" aria-label=\{t\('chart_period_label'\)/);
     expect(dashboard).toMatch(/PERIODS\.map\(\(p\) =>/);
