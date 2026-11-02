@@ -7,13 +7,17 @@ import { fileURLToPath } from 'node:url';
 // the components themselves (no DOM in this suite): a color that shifts when a
 // series is hidden is a visual regression, a visibility control that navigates
 // instead of writing is only visible by clicking, a period control that filtered
-// the stored records instead of the points would only show in the numbers, and an
-// axis that densifies into daily gridlines or prints a clock time is only visible
-// on screen. The pure rules live in `src/lib/chart.ts` and `src/lib/period.ts`,
-// tested directly in `src/lib/__tests__/chart.test.ts` and `period.test.ts`.
+// the stored records instead of the points would only show in the numbers, an axis
+// that densifies into daily gridlines or prints a clock time is only visible on
+// screen, and a screen that never re-reads its rows is only visible days later. The
+// pure rules live in `src/lib/chart.ts`, `src/lib/period.ts` and `src/lib/day.ts`,
+// tested directly in `src/lib/__tests__/chart.test.ts`, `period.test.ts` and
+// `day.test.ts`.
 const chart = readFileSync(fileURLToPath(new URL('../ProgressChart.tsx', import.meta.url)), 'utf8');
 const dashboard = readFileSync(fileURLToPath(new URL('../Dashboard.tsx', import.meta.url)), 'utf8');
 const hook = readFileSync(fileURLToPath(new URL('../../hooks/useChartPeriod.ts', import.meta.url)), 'utf8');
+const rollover = readFileSync(fileURLToPath(new URL('../../hooks/useDayRollover.ts', import.meta.url)), 'utf8');
+const visible = readFileSync(fileURLToPath(new URL('../../hooks/useRefreshOnVisible.ts', import.meta.url)), 'utf8');
 
 describe('the palette position survives a visibility change', () => {
   test('color comes from the whole exercise list, not the visible subset', () => {
@@ -162,5 +166,83 @@ describe('the eye in the catalog writes dashboard_visible', () => {
     // database never accepted.
     expect(/apply\(exercise\.dashboard_visible\)/.test(dashboard)).toBe(true);
     expect(dashboard).toContain("t('error_update_exercise')");
+  });
+});
+
+// Staleness is the one gap no runtime check in this suite can see: a tab left open
+// for days shows the rows it read on mount, and nothing on screen disagrees with
+// them, so the claim is made over the wiring that notices - the day boundary the
+// log turns on, and the two ways of looking at a tab again. The arithmetic itself is
+// `src/lib/day.ts`, checked directly in `src/lib/__tests__/day.test.ts`.
+describe('a dashboard left open refreshes itself', () => {
+  test('the screen schedules both boundaries', () => {
+    expect(dashboard).toContain('useDayRollover(fetchData)');
+    expect(dashboard).toContain('useRefreshOnVisible(fetchData)');
+  });
+
+  // The timer's deadline is anchored when the effect runs. A callback that changes
+  // identity would re-anchor it at the current day's midnight on every re-render -
+  // the eye toggle re-renders this screen - and midnight would never be reached.
+  test('the fetch it schedules has a stable identity', () => {
+    expect(/const fetchData = useCallback\(async/.test(dashboard)).toBe(true);
+    expect(/const fetchData = useCallback\([^]*?\}, \[\]\)/.test(dashboard)).toBe(true);
+  });
+
+  test('the rollover reschedules itself and is cleared on unmount', () => {
+    // One fire would cover one day only; an uncleared timer keeps the screen's
+    // callback alive after the screen is gone.
+    expect(/window\.setTimeout\(\(\) => \{[^]*onRollover\(\);[^]*schedule\(\);[^]*\}/.test(rollover)).toBe(true);
+    expect(rollover).toContain('schedule();');
+    expect(rollover).toMatch(/return \(\) => clearTimeout\(timer\)/);
+  });
+
+  test('the day rule is arithmetic in lib/, not a timer the screen writes', () => {
+    expect(rollover).toContain('msUntilMidnight(new Date())');
+    expect(dashboard).not.toMatch(/setTimeout|setInterval/);
+  });
+
+  test('a hidden tab costs nothing and the listeners go away', () => {
+    // Refetching on going hidden would spend a request every time the user switches
+    // tabs away, which is the state `visibilitychange` also fires on.
+    expect(visible).toMatch(/if \(document\.visibilityState === 'visible'\) refresh\(\)/);
+    expect(visible).toContain("document.addEventListener('visibilitychange', onVisibility)");
+    expect(visible).toContain("window.addEventListener('focus', run)");
+    expect(visible).toContain("document.removeEventListener('visibilitychange', onVisibility)");
+    expect(visible).toContain("window.removeEventListener('focus', run)");
+  });
+
+  test('a background refresh keeps the chart on screen', () => {
+    // The skeleton would blank the plot the user is looking at to show data that is
+    // usually about to be identical, so only the first load may blank it.
+    expect(dashboard).toContain('if (!background) setLoading(true)');
+    expect(dashboard).toContain('if (!background) setLoading(false)');
+    // The unguarded call is the regression this catches: a background fetch that
+    // flips `loading` blanks the plot, whatever the trigger was.
+    expect(dashboard).not.toMatch(/^\s*setLoading\((?:true|false)\);$/m);
+  });
+
+  test('two triggers in the same instant make one round trip', () => {
+    // A focus and a midnight timer can land together; stacked fetches would race over
+    // the same rows and write the same arrays twice.
+    expect(dashboard).toMatch(/if \(inFlight\.current \|\| pendingWrite\.current\) return;/);
+    expect(dashboard).toContain('inFlight.current = true');
+    expect(dashboard).toContain('inFlight.current = false');
+  });
+
+  test('a refresh waits out a visibility write', () => {
+    // The eye writes optimistically and the chart redraws off local state, so rows
+    // read before the write landed carry the old flag: handing them back would undo
+    // the click the user just made.
+    expect(dashboard).toContain('pendingWrite.current = true');
+    expect(dashboard).toContain('pendingWrite.current = false');
+    expect(/apply\(next\);\s*pendingWrite\.current = true/.test(dashboard)).toBe(true);
+  });
+
+  test('the refresh writes nothing to the database', () => {
+    // The only write the dashboard makes is still the visibility flag: a refresh must
+    // not become a save, and must not start filtering rows by date to be "fresh" -
+    // Max/Last stay the trigger's stored records (`chart-source.test.ts` above).
+    expect(dashboard.match(/supabase\.from\([^)]*\)\.update/g)?.length).toBe(1);
+    expect(dashboard).not.toMatch(/\.gte\(|\.lt\(|\.range\(/);
   });
 });

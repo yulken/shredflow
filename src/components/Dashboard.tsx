@@ -1,9 +1,11 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { BarChart3, Music2, Eye, EyeOff } from 'lucide-react';
 import { supabase, type Exercise, type PracticeSession } from '@/lib/supabase';
 import { t } from '@/lib/i18n';
 import { PERIODS, PERIOD_LABEL_KEYS } from '@/lib/period';
 import { useChartPeriod } from '@/hooks/useChartPeriod';
+import { useDayRollover } from '@/hooks/useDayRollover';
+import { useRefreshOnVisible } from '@/hooks/useRefreshOnVisible';
 import { ProgressChart } from '@/components/ProgressChart';
 
 type Props = {
@@ -23,20 +25,47 @@ export function Dashboard({ onSelectExercise }: Props) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  const fetchData = async () => {
-    setLoading(true);
+  // The rows are read on mount, on the day rollover, and on return to the tab. A
+  // screen left open for days would otherwise keep showing the snapshot it took on
+  // mount: the chart's points, and the window the points are filtered through, both
+  // come off this state (`ProgressChart` anchors its `now` per recomputation), so
+  // nothing refreshes until something changes it.
+  //
+  // Its identity is fixed (`useCallback` over nothing) so the rollover timer keeps
+  // the midnight it was scheduled at: re-running that effect re-anchors the
+  // deadline at the current day, and the eye toggle re-renders this screen.
+  const inFlight = useRef(false);
+  // A visibility write is optimistic, so a refresh that read the row before the
+  // write landed hands back the old flag and undoes the eye the user just clicked.
+  // A background refresh waits out the write instead of racing it.
+  const pendingWrite = useRef(false);
+  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+    // Two triggers landing in the same instant - a focus and a midnight timer -
+    // would otherwise stack two round trips over the same rows.
+    if (inFlight.current || pendingWrite.current) return;
+    inFlight.current = true;
+    // A background refresh keeps the chart on screen. The skeleton would blank the
+    // plot the user is looking at to show data that is usually about to be the same,
+    // and a failed one leaves the last good rows readable.
+    if (!background) setLoading(true);
     const [exercisesRes, sessionsRes] = await Promise.all([
       supabase.from('exercises').select('*').order('created_at', { ascending: true }),
       supabase.from('practice_sessions').select('*').order('created_at', { ascending: true }),
     ]);
     if (!exercisesRes.error) setExercises(exercisesRes.data || []);
     if (!sessionsRes.error) setSessions(sessionsRes.data || []);
-    setLoading(false);
-  };
+    if (!background) setLoading(false);
+    inFlight.current = false;
+  }, []);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
+
+  // The day is the unit a session is logged in, so the day boundary is the refresh
+  // boundary; `useRefreshOnVisible` covers a session logged elsewhere the same day.
+  useDayRollover(fetchData);
+  useRefreshOnVisible(fetchData);
 
   // The eye is the control: clicking it writes `dashboard_visible` and the chart
   // redraws off this same state, so the series appears/disappears before the
@@ -47,7 +76,9 @@ export function Dashboard({ onSelectExercise }: Props) {
     const apply = (value: boolean) =>
       setExercises((prev) => prev.map((e) => (e.id === exercise.id ? { ...e, dashboard_visible: value } : e)));
     apply(next);
+    pendingWrite.current = true;
     const { error: updateError } = await supabase.from('exercises').update({ dashboard_visible: next }).eq('id', exercise.id);
+    pendingWrite.current = false;
     if (updateError) {
       apply(exercise.dashboard_visible);
       setError(t('error_update_exercise'));

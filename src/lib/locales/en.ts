@@ -4,10 +4,10 @@ export const EN = {
   dateLocale: 'en-US',
   categories: ['Technique', 'Speed', 'Warm-up', 'Chords', 'Scales', 'Improvisation', 'Rhythm', 'Study'],
   strings: {
-    app_brand: 'GuitarTrain',
-    footer_tagline: 'GuitarTrain — Guitar practice tracker',
+    app_brand: 'ShredFlow',
+    footer_tagline: 'ShredFlow — Guitar practice tracker',
 
-    page_title: 'GuitarTrain — Guitar practice tracker',
+    page_title: 'ShredFlow — Guitar practice tracker',
 
     theme_light: 'Switch to light mode',
     theme_dark: 'Switch to dark mode',

@@ -13,9 +13,9 @@ export const ES = {
     'Estudio',
   ],
   strings: {
-    app_brand: 'GuitarTrain',
-    footer_tagline: 'GuitarTrain — registro de práctica de guitarra',
-    page_title: 'GuitarTrain — registro de práctica de guitarra',
+    app_brand: 'ShredFlow',
+    footer_tagline: 'ShredFlow — Registro de práctica de guitarra',
+    page_title: 'ShredFlow — Registro de práctica de guitarra',
 
     theme_light: 'Activar modo claro',
     theme_dark: 'Activar modo oscuro',

@@ -13,9 +13,9 @@ export const PT = {
     'Estudo',
   ],
   strings: {
-    app_brand: 'GuitarTrain',
-    footer_tagline: 'GuitarTrain — Controle de treino de guitarra',
-    page_title: 'GuitarTrain — Controle de treino de guitarra',
+    app_brand: 'ShredFlow',
+    footer_tagline: 'ShredFlow — Controle de treino de guitarra',
+    page_title: 'ShredFlow — Controle de treino de guitarra',
     theme_light: 'Ativar modo claro',
     theme_dark: 'Ativar modo escuro',
     exercises_title: 'Exercícios',
