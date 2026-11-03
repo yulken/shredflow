@@ -670,3 +670,79 @@ Phase C, where the derived fallback there stays only for pre-migration rows.
     write still the visibility flag, and the dashboard importing nothing from `order`.
   - `vitest` 251 passed (17 files); `eslint`, `tsc --noEmit`, `npm run build` clean. Browser pass
     (the two buttons swapping the grid, the choice surviving a reload and the PT/ES labels) is Caio's.
+- **2026-11-03 Song progress (plan phases A–C, E, F)** ✅ — plan `/home/caio/.opencode/plan/song-progress.md`,
+  decisions D1–D6 agreed with Caio on 2026-11-02. A song is a fixed structure of N measures, each with the
+  tempo the tab sets there, practiced in blocks — not an exercise and not a practice session, so nothing here
+  touches `exercises`/`practice_sessions` or the dashboard's BPM chart. Deviations recorded in `requirements.md` §6.
+  - `supabase/migrations/20261102230000_add_song_progress.sql` (new): `songs` (`title`, the re-import
+    identifiers `songsterr_url`/`songsterr_song_id`/`songsterr_revision_id`/`songsterr_image`,
+    `total_measures >= 1`, `percent numeric(5,2) DEFAULT 0`), `song_measure_targets` (one row per measure,
+    unique per song, `bpm`/`time_numerator`/`time_denominator` NOT NULL), `song_progress_logs` (free-text
+    `section`, `start_measure <= end_measure`, `bpm_clean >= 1` required, `bpm_limit` nullable info,
+    `tension_level` 1–3 default 2, `notes`). RLS on all three keyed on `auth.uid() = user_id`, `stamp_owner()`
+    on writes, `song_measure_targets` reached only through its parent song. Percent is owned by the database:
+    `song_percent()` spelled once in SQL, fired by `sync_song_percent*` on insert/update/delete of a log, of a
+    target, and on an update of `total_measures`. Applied to the running local stack by migration only — no
+    `db reset`, so the existing exercises and sessions stayed (Caio's choice, asked the same day).
+  - `src/lib/songProgress.ts` (new): `measurePeak`, `measureState`, `measureProgress`, `targetFor`,
+    `songPercent`, `blockPercent`, `tempoRuns`, `formatPercent`, `percentHistory`, `percentOf` — the trigger's
+    arithmetic mirrored in TS for display, the way `realBpm()` mirrors `sync_exercise_bpm_records`.
+    `MEASURE_WEIGHT = 1` is the D3 rule named as a constant rather than as a magic 1 in the sum.
+    `src/lib/songOrder.ts` + `src/hooks/useSongOrder.ts` mirror `order.ts`/`useListOrder.ts`: `recent` |
+    `most_logs`, storage key `song_list_order`, validated at mount.
+  - `src/components/SongList.tsx` (new, 455 lines): cards with the stored percent as a bar (`aria-valuenow`,
+    accent green at 100), measures/log-count/last-log chips, the practiced-today check off `isSameLocalDay`,
+    the same day-rollover and refresh-on-visible wiring as the exercise list, the two-button order control,
+    delete with confirmation, and a create/edit form for a hand-typed song (`title`, `total_measures`,
+    optional Songsterr URL). Payloads never carry `percent` or `user_id`: those columns are the triggers'.
+  - `src/components/SongView.tsx` (new, 778 lines): headline percent re-read after every write (a delete is
+    the one write that can lower it), the Songsterr link with inline edit, the structure as tempo runs —
+    consecutive measures sharing a tempo merge, so Back In Black reads one line and Master of Puppets six —
+    with a hint naming measures that have no target row, the log table (section, measures, clean, limit, the
+    block's own `blockPercent`, date, edit/delete per row), the logging form (section, measure range, clean
+    BPM, optional limit, tension, notes) with range/BPM guards, and a live preview of what the draft would do
+    (`blockPercent`/`songPercent` over the draft, not over the stored column). `App.tsx`: Songs is a fourth
+    top-level view beside Dashboard/Exercises/Settings, a song opens the way an exercise does, and every nav
+    choice clears both selections; the four nav buttons now shrink their padding below `sm` for the extra tab.
+  - `ProgressChart.tsx` gained a percent mode instead of a second chart component: `percentPoints`/
+    `percentLabel` plot `percentHistory` with Y fixed 0–100, one series, no legend, tooltip naming the day and
+    the percent, and the same "nothing logged at all" vs "nothing inside this window" split. `chart.ts`
+    `spansMultipleYears` and `period.ts` `tickUnit` widened to `{ created_at: string }[]`, since both charts
+    plot days; `period.ts` gained `withinPeriod` for the percent window, which has no session rows to filter.
+  - Keys: 66 × en/pt/es (`nav_songs`, the list and screen headings, structure rows, log-form fields and
+    errors, chart strings, aria labels), placeholders only `{count}` and `{bpm}`; PT `Músicas`/`medida`,
+    ES `Canciones`/`compás` — nothing English left in either dictionary.
+  - `scripts/import-songsterr.mjs` (new) + `npm run import:songsterr -- <url|songId> [--part N] [--bpm N]
+    [--update] [--dry-run] [--yes] [--from-file FILE]`: reads the tab page's `<script id="state">` for
+    songId/revisionId/image/tracks, or `/api/song/{id}` + `/api/meta/{songId}/revisions` + `/api/revision/{rev}`
+    for a bare songId; fetches `https://dqsljvtekg760.cloudfront.net/{songId}/{rev}/{image}/{part}.json`
+    (`fetch` gunzips it; songsterr.com sends no CORS header, so this cannot run in the browser); builds targets
+    carrying the tempo markers in `automations.tempo` and the signature forward measure by measure, measures
+    numbered from 1. Verified live: Back In Black (song 1024, rev 9880696, image `v0-3-2-h3J5I0P2gGq4Koaf`,
+    track 2) → 100 measures, 94 BPM, 4/4, 11 blocks; Master of Puppets (song 455118, rev 10156369, track 7) →
+    418 measures, tempo changes 212/185/174/145/106, signatures 4/4 + 21/32 + 2/4. The page state's own
+    `tempo` field is the player's metronome default (72 on every tab) and is never read: a tab that states no
+    tempo is refused rather than imported at 72, with `--bpm N` as the manual answer. Idempotent by Songsterr's
+    songId — a second run refuses, `--update` rewrites the target rows and keeps the logs, and a measure-count
+    change against existing logs asks for an explicit answer (`--yes` or a TTY; no TTY, no answer, refused).
+  - Lab against the local stack, signed in as a throwaway user (`caio.import@test.local`) so Caio's account was
+    never touched: Back In Black imported as song `50656bd0-7ac4-4a68-8282-2366ed14df23`, 100 targets at 94 BPM
+    4/4, percent 0 → after Intro 1–10 @94, Verse 1 11–18 @94, Chorus 19–26 @80, Solo 43–58 @71 → **36.89**,
+    matching the spreadsheet's `SUMPRODUCT(measures × bpm_clean / 94) / 100` and the TS mirror exactly. A slower
+    Solo 43–58 @60 added afterwards left it at **36.89** (the sheet's own formula would have gone to 47.11 — D2
+    holds, the peak never falls). Re-logging Chorus 19–26 @94 → **38.09** (mirror agrees). The overlapping
+    "Refrão 45–82" @84 → **61.47** against the sheet's SUMPRODUCT 89.06: overlap resolves per measure instead of
+    counting the same measures twice. All 7 rows came back with `user_id` stamped by `stamp_owner()`.
+  - Tests: `songProgress.test.ts` (new, 39), `song-schema.test.ts` (new, 17),
+    `songsterr-import.test.ts` (new, 15 — greps the script for the page-state read, the CDN path, the marker
+    carry-forward, "no percent in the payload", "no `user_id:` in the payload", logs never deleted),
+    `song-view-source.test.ts` (new, 20), `song-list-source.test.ts` (new, 10); `chart-source.test.ts` gained
+    the percent branch, `touch-targets.test.ts` the song screens' hit areas, `auth-schema.test.ts` the new
+    tables' policies. `vitest` 364 passed (22 files); `tsc --noEmit`, `eslint` and `npm run build` clean
+    (the bundle-size warning the build prints predates this work).
+  - Still Caio's: the eleven rows of his spreadsheet for Back In Black to log and compare against the sheet's
+    own columns (Phase F's last item), the browser pass (Songs tab at 360px, the percent bar, structure runs,
+    the log form's preview, the percent chart's period buttons), and the lab cleanup — delete the lab song and
+    its logs, the throwaway user `caio.import@test.local`, and `/tmp/opencode/lab-song.mjs`. The lab script is
+    kept outside the repo (`scripts/lab-song.mjs` was removed before the commit) and takes `--blocks=FILE` to
+    log Caio's rows and `--no-insert` to compare what is already in the table without writing.

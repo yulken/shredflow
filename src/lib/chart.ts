@@ -3,12 +3,11 @@
 // a day, not a moment (requirements §2), so no label carries a clock time; the year
 // appears only when the plotted range spans more than one year.
 
-import type { PracticeSession } from './supabase';
-
-/** True when the sessions actually drawn cover more than one year. The year is read
- * in the browser's zone, the same one `toLocaleDateString` prints below. */
-export function spansMultipleYears(sessions: PracticeSession[]): boolean {
-  return new Set(sessions.map((s) => new Date(s.created_at).getFullYear())).size > 1;
+/** True when the rows actually drawn cover more than one year. The year is read
+ * in the browser's zone, the same one `toLocaleDateString` prints below. Anything
+ * with a `created_at` counts: practice sessions and song logs both plot a day. */
+export function spansMultipleYears(logs: { created_at: string }[]): boolean {
+  return new Set(logs.map((s) => new Date(s.created_at).getFullYear())).size > 1;
 }
 
 // Which side the locale puts the month. `formatToParts` is the only thing that says

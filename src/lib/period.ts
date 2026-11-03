@@ -54,8 +54,9 @@ export type TickUnit = 'week' | 'month' | 'quarter';
 
 /** Tick unit for the X axis, derived from the points actually drawn: Chart.js draws
  * one grid line per tick, so the unit grows with the window. `week` keeps the Sunday
- * alignment the date-fns adapter's `week` start gives (`weekStartsOn: 0`). */
-export function tickUnit(drawn: PracticeSession[]): TickUnit {
+ * alignment the date-fns adapter's `week` start gives (`weekStartsOn: 0`). Both the
+ * BPM chart and the percent chart plot days, so any row with a `created_at` feeds it. */
+export function tickUnit(drawn: { created_at: string }[]): TickUnit {
   if (drawn.length === 0) return 'week';
   const times = drawn.map((s) => new Date(s.created_at).getTime());
   const days = (Math.max(...times) - Math.min(...times)) / DAY_MS;

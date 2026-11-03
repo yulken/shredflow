@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Guitar, BarChart3, Music2, Settings } from 'lucide-react';
+import { Guitar, BarChart3, Music2, ListMusic, Settings } from 'lucide-react';
 import { useTheme } from '@/hooks/useTheme';
 import { useLanguage } from '@/hooks/useLanguage';
 import { useAuth } from '@/hooks/useAuth';
@@ -9,7 +9,9 @@ import { t } from '@/lib/i18n';
 import { Dashboard } from '@/components/Dashboard';
 import { ExerciseList } from '@/components/ExerciseList';
 import { SessionView } from '@/components/SessionView';
-import type { Exercise } from '@/lib/supabase';
+import { SongList } from '@/components/SongList';
+import { SongView } from '@/components/SongView';
+import type { Exercise, Song } from '@/lib/supabase';
 
 // Fourth top-level view: Dashboard is the landing screen; the brand button
 // routes back to it, Exercises and Settings are reachable from the header, and
@@ -28,14 +30,22 @@ export default function App() {
   const { theme, setTheme, toggleTheme } = useTheme();
   const { lang, setLanguage, toggleLanguage } = useLanguage();
   const { session, ready, signOut } = useAuth();
-  const [listView, setListView] = useState<'dashboard' | 'exercises' | 'settings'>('dashboard');
+  const [listView, setListView] = useState<'dashboard' | 'exercises' | 'songs' | 'settings'>('dashboard');
   const [selectedExercise, setSelectedExercise] = useState<Exercise | null>(null);
+  // A song is opened the same way an exercise is: one row on screen, and the nav's highlight
+  // keeps pointing at the list it came from until another view is chosen.
+  const [selectedSong, setSelectedSong] = useState<Song | null>(null);
 
   const openExercise = (exercise: Exercise) => setSelectedExercise(exercise);
+  const openSong = (song: Song) => setSelectedSong(song);
   const backToList = () => setSelectedExercise(null);
-  const goDashboard = () => { setListView('dashboard'); setSelectedExercise(null); };
-  const goExercises = () => { setListView('exercises'); setSelectedExercise(null); };
-  const goSettings = () => { setListView('settings'); setSelectedExercise(null); };
+  const backToSongs = () => setSelectedSong(null);
+  // Every nav choice drops both selections: the songs list and the exercises list are peers,
+  // and a stale selection would keep the previous row on screen under the new tab.
+  const goDashboard = () => { setListView('dashboard'); setSelectedExercise(null); setSelectedSong(null); };
+  const goExercises = () => { setListView('exercises'); setSelectedExercise(null); setSelectedSong(null); };
+  const goSongs = () => { setListView('songs'); setSelectedExercise(null); setSelectedSong(null); };
+  const goSettings = () => { setListView('settings'); setSelectedExercise(null); setSelectedSong(null); };
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 transition-colors duration-300">
@@ -58,7 +68,7 @@ export default function App() {
               <nav className="flex items-center gap-1 mr-1 sm:mr-2">
                 <button
                   onClick={goDashboard}
-                  className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-1.5 px-2 sm:px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     listView === 'dashboard' && !selectedExercise
                       ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -69,7 +79,7 @@ export default function App() {
                 </button>
                 <button
                   onClick={goExercises}
-                  className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-1.5 px-2 sm:px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     listView === 'exercises' && !selectedExercise
                       ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -79,8 +89,19 @@ export default function App() {
                   <span className="hidden sm:inline">{t('nav_exercises')}</span>
                 </button>
                 <button
+                  onClick={goSongs}
+                  className={`flex items-center gap-1.5 px-2 sm:px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    listView === 'songs' && !selectedSong
+                      ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
+                      : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                  }`}
+                >
+                  <ListMusic className="h-4 w-4" />
+                  <span className="hidden sm:inline">{t('nav_songs')}</span>
+                </button>
+                <button
                   onClick={goSettings}
-                  className={`flex items-center gap-1.5 px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                  className={`flex items-center gap-1.5 px-2 sm:px-3 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                     listView === 'settings' && !selectedExercise
                       ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
                       : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
@@ -112,8 +133,15 @@ export default function App() {
             exercise={selectedExercise}
             onBack={backToList}
           />
+        ) : selectedSong ? (
+          <SongView
+            song={selectedSong}
+            onBack={backToSongs}
+          />
         ) : listView === 'exercises' ? (
           <ExerciseList onSelectExercise={openExercise} />
+        ) : listView === 'songs' ? (
+          <SongList onSelectSong={openSong} />
         ) : listView === 'settings' ? (
           <SettingsView
             theme={theme}

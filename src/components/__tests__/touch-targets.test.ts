@@ -11,6 +11,8 @@ const app = readFileSync(fileURLToPath(new URL('../../App.tsx', import.meta.url)
 const dashboard = readFileSync(fileURLToPath(new URL('../Dashboard.tsx', import.meta.url)), 'utf8');
 const list = readFileSync(fileURLToPath(new URL('../ExerciseList.tsx', import.meta.url)), 'utf8');
 const view = readFileSync(fileURLToPath(new URL('../SessionView.tsx', import.meta.url)), 'utf8');
+const songList = readFileSync(fileURLToPath(new URL('../SongList.tsx', import.meta.url)), 'utf8');
+const songView = readFileSync(fileURLToPath(new URL('../SongView.tsx', import.meta.url)), 'utf8');
 const chart = readFileSync(fileURLToPath(new URL('../ProgressChart.tsx', import.meta.url)), 'utf8');
 const langToggle = readFileSync(fileURLToPath(new URL('../LanguageToggle.tsx', import.meta.url)), 'utf8');
 const authView = readFileSync(fileURLToPath(new URL('../AuthView.tsx', import.meta.url)), 'utf8');
@@ -21,8 +23,12 @@ describe('nothing is reachable only by hovering', () => {
     // the per-session trash are the only way to change or remove those rows.
     expect(list).toContain('[@media(hover:hover)]:opacity-0');
     expect(view).toContain('[@media(hover:hover)]:opacity-0');
+    expect(songList).toContain('[@media(hover:hover)]:opacity-0');
+    expect(songView).toContain('[@media(hover:hover)]:opacity-0');
     expect(list).not.toMatch(/opacity-0 group-hover:opacity-100/);
     expect(view).not.toMatch(/opacity-0 group-hover:opacity-100/);
+    expect(songList).not.toMatch(/opacity-0 group-hover:opacity-100/);
+    expect(songView).not.toMatch(/opacity-0 group-hover:opacity-100/);
   });
 
   test('hover states cannot stick after a tap', () => {
@@ -31,6 +37,9 @@ describe('nothing is reachable only by hovering', () => {
     expect(list).toContain('[@media(hover:hover)]:hover:-translate-y-0.5');
     expect(list).toContain('[@media(hover:hover)]:hover:shadow-md');
     expect(list).toContain('active:scale-[0.99]');
+    expect(songList).toContain('[@media(hover:hover)]:hover:-translate-y-0.5');
+    expect(songList).toContain('[@media(hover:hover)]:hover:shadow-md');
+    expect(songList).toContain('active:scale-[0.99]');
   });
 });
 
@@ -43,6 +52,10 @@ describe('the chip stays small and the tap area is not', () => {
     expect(dashboard).toContain('before:-inset-[10px]');
     expect(view).toContain('before:-inset-[6px]');
     expect(list).toContain('before:-inset-[2px]');
+    // A song row's pencil and trash are the only way to change or remove a block, so they
+    // join the same rule: 36px of visual, a hit area a finger can actually land on.
+    expect(songView).toContain('before:-inset-[6px]');
+    expect(songList).toContain('before:-inset-[2px]');
   });
 });
 
@@ -55,6 +68,14 @@ describe('the header fits a narrow screen', () => {
     expect(app).toContain('mr-1 sm:mr-2');
   });
 
+  test('the nav row fits four views without wrapping', () => {
+    // Songs joined the row as a peer of exercises. The label is hidden below sm, and the
+    // padding shrinks with it: brand, four buttons and the two toggles share one row that
+    // cannot wrap, so at 320px the full-size padding pushes the toggles off the edge.
+    expect(app).toMatch(/px-2 sm:px-3 py-2\.5/);
+    expect(app.match(/hidden sm:inline/g)).toHaveLength(4);
+  });
+
   test('the language toggle stacks its icon and its code', () => {
     // Side by side the globe and `PT` collide inside a 40px box.
     expect(langToggle).toContain('flex flex-col items-center justify-center');
@@ -65,6 +86,16 @@ describe('the header fits a narrow screen', () => {
     // block can shrink (`min-w-0`) but the button must not be squeezed flat.
     expect(list).toContain('text-2xl sm:text-3xl');
     expect(list).toContain('flex shrink-0 items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3');
+  });
+
+  test('the songs header shrinks and wraps below sm', () => {
+    // The title, the three order chips and the add button exceed 360px on one line, so the
+    // row wraps rather than dragging the page sideways; the button keeps its size, the title
+    // block shrinks.
+    expect(songList).toContain('text-2xl sm:text-3xl');
+    expect(songList).toContain('flex flex-wrap items-center justify-between gap-3');
+    expect(songList).toContain('flex shrink-0 flex-wrap items-center gap-2');
+    expect(songList).toContain('min-w-0');
   });
 });
 
@@ -79,6 +110,18 @@ describe('a card fits the width it is given', () => {
     // The tab anchor left the card: the tab opens on the session screen, and
     // a second way to navigate on a tap that already opens the exercise is noise.
     expect(list).not.toContain('link_tab_aria');
+  });
+
+  test('the song card wraps its chips and shrinks its bar', () => {
+    // Measures, logs and the last log are three chips, and the percent bar is a flex child
+    // whose track would otherwise claim a min-content width: the chips wrap, and the bar gets
+    // `min-w-0 flex-1` so it gives the row's width back on a phone.
+    expect(songList).toContain('flex flex-wrap items-center gap-x-3');
+    expect(songList).toContain('min-w-0 flex-1 rounded-full');
+    expect(songList).toContain('min-w-0 flex-1 text-lg font-semibold');
+    // The tab opens on the song screen, the same reason the exercise card dropped its link:
+    // a second way to navigate on a tap that already opens the song is noise.
+    expect(songList).not.toContain('songsterr_link_aria');
   });
 
   test('the title leads the card where the note tile used to', () => {
@@ -115,6 +158,13 @@ describe('the page scrolls once', () => {
     expect(view).not.toMatch(/max-h-\[600px\] overflow-y-auto/);
   });
 
+  test('the song history has no inner scroll below sm', () => {
+    // Same rule as the session history: a box that scrolls inside the page traps a finger's
+    // swipe, and a song's rows are many per day, so the list is long on a phone.
+    expect(songView).toContain('sm:max-h-[600px] sm:overflow-y-auto');
+    expect(songView).not.toMatch(/max-h-\[600px\] overflow-y-auto/);
+  });
+
   test('nothing holds the phone page wider than the screen', () => {
     // Three intrinsic widths once pushed the session screen past 360px and made the
     // page drag sideways: the implicit grid track (auto = min-content, which the
@@ -124,6 +174,12 @@ describe('the page scrolls once', () => {
     expect(view).toContain('grid grid-cols-1 gap-6 lg:grid-cols-5');
     expect(chart).toContain('min-w-0 h-[260px] sm:h-[360px]');
     expect(view).toContain('min-w-0 flex-1 px-4 py-3');
+    // The song screen takes the same three floors: the grid track, the canvas inside it, and
+    // the number inputs whose default `size` is 20 characters.
+    expect(songView).toContain('grid grid-cols-1 gap-6 lg:grid-cols-5');
+    expect(songView).toContain('min-w-0 flex-1 px-4 py-3');
+    expect(songView).toContain('w-full min-w-0 px-4 py-3');
+    expect(songList).toContain('w-full min-w-0 px-4 py-3');
   });
 
   test('cards give their padding back on a phone', () => {
@@ -131,6 +187,8 @@ describe('the page scrolls once', () => {
     expect(dashboard).toContain('card p-4 sm:p-6');
     expect(view).toContain('card p-4 sm:p-6');
     expect(list).toContain('card p-4 sm:p-5');
+    expect(songView).toContain('card p-4 sm:p-6');
+    expect(songList).toContain('card p-4 sm:p-5');
   });
 });
 

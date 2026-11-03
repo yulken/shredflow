@@ -113,7 +113,7 @@ describe('the quiet variant keeps the axis and thins its marks', () => {
   test('the axis title is the one label the quiet variant drops', () => {
     // The tooltip names the unit for every point, so the numbers stay readable and
     // the name beside them goes.
-    expect(chart).toMatch(/title: \{ display: !compact, text: t\('chart_y_axis'\)/);
+    expect(chart).toMatch(/title: \{ display: !compact, text: percent \? t\('song_chart_y_axis'\) : t\('chart_y_axis'\)/);
     expect(chart).toMatch(/callback: \(v\) => tickDateLabel\(Number\(v\), dateLocale\(\), withYear\)/);
   });
 });
@@ -162,7 +162,7 @@ describe('the period control filters points, not records', () => {
     // The window is anchored once per recomputation, and `period` is a dependency:
     // a control click has to rebuild the points, not be read at draw time only.
     expect(chart).toMatch(/const now = new Date\(\)/);
-    expect(chart).toMatch(/\}, \[exercises, sessions, period\]/);
+    expect(chart).toMatch(/\}, \[exercises, sessions, percentPoints, percentLabel, period\]/);
   });
 
   test('an empty window says so, separately from having nothing logged', () => {
@@ -215,6 +215,60 @@ describe('the year is conditional on what is plotted', () => {
     expect(chart).toContain('withYear: spansMultipleYears(drawn)');
     // Both labels read the same flag, so the axis and the tooltip never disagree.
     expect(chart).toMatch(/callback: \(\w+\) => tickDateLabel\(.*withYear\)/);
+  });
+});
+
+// The song screen plots the other unit on the same canvas (decision D1): Y is the played
+// percent of one song, and nothing about the exercise chart may leak into it. Both shapes
+// are built in one `useMemo`, so the claims are read off the branch that answers each.
+describe('the percent axis answers a different question', () => {
+  test('percent points are filtered by the same window as sessions', () => {
+    expect(chart).toMatch(/const inPeriod = percentPoints\.filter\(\(p\) => withinPeriod\(p\.date\.toISOString\(\), period, now\)\)/);
+    // The axis shape follows the points drawn, exactly as the BPM branch: a day outside
+    // the window cannot decide the tick unit or whether the year is printed.
+    expect(chart).toMatch(/const days = inPeriod\.map\(\(p\) => \(\{ created_at: p\.date\.toISOString\(\) \}\)/);
+    expect(chart).toContain('withYear: spansMultipleYears(days)');
+    expect(chart).toContain('unit: tickUnit(days)');
+  });
+
+  test('the scale stops at 100, because a percent is a share', () => {
+    // BPM has no ceiling; a percent does. Without the cap a song at 30% draws a plot
+    // that looks finished, because the axis only spans the points.
+    expect(chart).toMatch(/max: percent \? 100 : undefined/);
+    expect(chart).not.toMatch(/max: 100\b/);
+    expect(chart).toMatch(/beginAtZero: true/);
+  });
+
+  test('the tooltip says the share, not the BPM arithmetic', () => {
+    // The percent arm reads the point it was drawn from; `percentSeries` is empty on the
+    // BPM branch, so the two arms never answer for the same dataset.
+    expect(chart).toMatch(/const point = percentSeries\[ctx\.datasetIndex\]\?\.\[ctx\.dataIndex\]/);
+    expect(chart).toContain("t('songs_percent_caption', { count: formatPercent(point.percent) })");
+    expect(chart).toContain('seriesSessions: []');
+    expect(chart).toContain('percentSeries: []');
+  });
+
+  test('the percent series carries no legend and no exercise', () => {
+    // The series list is a dashboard thing: one song has nothing to switch on, and the
+    // tooltip names it. `seriesSessions: []` is what keeps a song out of the BPM tooltip's
+    // `bpm x clicks` line.
+    expect(chart).toMatch(/label: percentLabel \?\? t\('song_chart_y_axis'\)/);
+    expect(chart).toMatch(/seriesSessions: \[\]/);
+  });
+
+  test('an empty percent chart says which kind of empty it is', () => {
+    expect(chart).toContain("t(hasAnyPoint ? 'song_chart_empty_period' : 'song_chart_empty')");
+    expect(chart).toMatch(/hasAnyPoint: percentPoints\.length > 0/);
+    expect(chart).toMatch(/hasAnyPoint: false/);
+    // The exercise wording stays for the exercise chart - the song screen cannot say
+    // "no sessions", and the dashboard cannot say "no song logs".
+    expect(chart).toContain("t(hasAnySession ? 'chart_empty_period' : 'chart_empty')");
+  });
+
+  test('a song never joins the dashboard\'s multi-series BPM chart', () => {
+    // Decision D1: songs are a separate entity and the two answers are different questions,
+    // so the dashboard gets no percent prop and the song screen gets no exercises.
+    expect(dashboard).not.toMatch(/percentPoints|percentLabel/);
   });
 });
 

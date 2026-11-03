@@ -14,8 +14,9 @@ import { Line } from 'react-chartjs-2';
 import { t, dateLocale } from '@/lib/i18n';
 import { tensionLabel } from '@/lib/tension';
 import { realBpm } from '@/lib/bpm';
+import { formatPercent, type PercentPoint } from '@/lib/songProgress';
 import { spansMultipleYears, tickDateLabel, tooltipDateLabel } from '@/lib/chart';
-import { filterSessions, tickUnit, type Period } from '@/lib/period';
+import { filterSessions, tickUnit, withinPeriod, type Period } from '@/lib/period';
 import type { Exercise, PracticeSession } from '@/lib/supabase';
 
 // Time scale needs the date-fns adapter registered above; LinearScale covers
@@ -65,8 +66,16 @@ function usePlotWidth() {
 }
 
 type Props = {
-  exercises: Exercise[];
-  sessions: PracticeSession[];
+  /** Y is Real BPM, one series per visible exercise - the dashboard's chart and the
+   * session screen's. Left out when the screen plots percent instead. */
+  exercises?: Exercise[];
+  sessions?: PracticeSession[];
+  /** Y is the played percent of one song, 0-100 - the song screen's chart. A song never
+   * joins the dashboard's BPM chart (decision D1), so this series replaces the exercise
+   * one instead of sitting beside it: the two answers are different questions. */
+  percentPoints?: PercentPoint[];
+  /** Names the percent series in the tooltip: the song's title. */
+  percentLabel?: string;
   period: Period;
   /** The quiet variant, for a screen that plots one series: no legend, no axis
    * title, half the guide lines and fewer tick labels. The axis itself stays - the
@@ -74,16 +83,57 @@ type Props = {
   compact?: boolean;
 };
 
-export function ProgressChart({ exercises, sessions, period, compact = false }: Props) {
+export function ProgressChart({
+  exercises = [],
+  sessions = [],
+  percentPoints,
+  percentLabel,
+  period,
+  compact = false,
+}: Props) {
   const { ref, narrow } = usePlotWidth();
   // One series per exercise with dashboard_visible = true; Y is Real BPM
   // (bpm x clicks_per_beat), matching the DB trigger's arithmetic. The period is a
   // chart-only filter: the catalog's Max/Last stay the stored trigger records.
-  const { chartData, seriesSessions, hasData, hasAnySession, withYear, unit } = useMemo(() => {
+  const { chartData, seriesSessions, percentSeries, hasData, hasAnySession, hasAnyPoint, withYear, unit, percent } = useMemo(() => {
     // The window is anchored here, once per recomputation: the control changes
     // `period`, a refetch changes `sessions`, and both rebuild the points.
     const now = new Date();
-    const inPeriod = filterSessions(sessions, period, now);
+
+    if (percentPoints) {
+      // `percentHistory` already folds a day's blocks into one point; the window is the
+      // chart's own filter, so the days it drops are the period's doing, not the curve's.
+      const inPeriod = percentPoints.filter((p) => withinPeriod(p.date.toISOString(), period, now));
+      // The axis rules read days, and a percent point carries one as a Date: shaped into
+      // the `created_at` row `tickUnit` and `spansMultipleYears` take, so both charts ask
+      // the same two questions in the same way.
+      const days = inPeriod.map((p) => ({ created_at: p.date.toISOString() }));
+      return {
+        chartData: {
+          datasets: [{
+            label: percentLabel ?? t('song_chart_y_axis'),
+            data: inPeriod.map((p) => ({ x: p.date, y: p.percent })),
+            borderColor: PALETTE[0],
+            backgroundColor: PALETTE[0],
+            pointRadius: 3,
+            pointHoverRadius: 5,
+            tension: 0.3,
+          }],
+        },
+        seriesSessions: [],
+        // Nested like the BPM series: the tooltip reads a point by dataset and index, so a
+        // flat list would answer one dataset's points for every dataset asked.
+        percentSeries: [inPeriod],
+        hasData: inPeriod.length > 0,
+        // Nothing drawn and nothing logged are two different answers here too: a song
+        // logged only outside the window is the window's doing, not an empty song.
+        hasAnySession: false,
+        hasAnyPoint: percentPoints.length > 0,
+        withYear: spansMultipleYears(days),
+        unit: tickUnit(days),
+        percent: true,
+      };
+    }
 
     // The palette position comes from the whole list: visibility only decides which
     // series is drawn, so hiding one exercise does not shift the colors of the rest.
@@ -91,6 +141,7 @@ export function ProgressChart({ exercises, sessions, period, compact = false }: 
     const paletteIndex = new Map(byCreation.map((e, i) => [e.id, i]));
     const visible = byCreation.filter((e) => e.dashboard_visible);
 
+    const inPeriod = filterSessions(sessions, period, now);
     const series = visible.map((exercise) =>
       inPeriod
         .filter((s) => s.exercise_id === exercise.id)
@@ -118,14 +169,17 @@ export function ProgressChart({ exercises, sessions, period, compact = false }: 
     return {
       chartData: { datasets },
       seriesSessions: series,
+      percentSeries: [],
       hasData: drawn.length > 0,
       // Distinguishes "nothing logged at all" from "nothing inside this window":
       // both are empty charts, but only the second one is the period's doing.
       hasAnySession: sessions.some((s) => visible.some((e) => e.id === s.exercise_id)),
+      hasAnyPoint: false,
       withYear: spansMultipleYears(drawn),
       unit: tickUnit(drawn),
+      percent: false,
     };
-  }, [exercises, sessions, period]);
+  }, [exercises, sessions, percentPoints, percentLabel, period]);
 
   const options = useMemo<ChartOptions<'line'>>(() => {
     return {
@@ -161,9 +215,14 @@ export function ProgressChart({ exercises, sessions, period, compact = false }: 
         y: {
           // The unit name the tooltip already spells for every point, so the quiet
           // variant drops the title and keeps the numbers: the scale stays readable
-          // without a label repeating what the hover says.
-          title: { display: !compact, text: t('chart_y_axis'), color: '#9ca3af' },
+          // without a label repeating what the hover says. The percent axis names
+          // itself the same way, in the other unit.
+          title: { display: !compact, text: percent ? t('song_chart_y_axis') : t('chart_y_axis'), color: '#9ca3af' },
           beginAtZero: true,
+          // A percent is a share of the tab, so 100 is the top of the scale rather
+          // than a value the points happen to reach: the curve reads against the
+          // whole song, and a song at 30% draws a third of the plot filled.
+          max: percent ? 100 : undefined,
           grid: { color: compact ? GRID_QUIET : GRID },
           // A limit here caps ticks and gridlines together, so a narrow column gets
           // a few readable marks instead of a ladder.
@@ -206,6 +265,12 @@ export function ProgressChart({ exercises, sessions, period, compact = false }: 
               return tooltipDateLabel(x, dateLocale(), withYear);
             },
             label: (ctx) => {
+              // A percent point is a day's share of the song, not a practice log, so the
+              // hover names the share instead of the BPM arithmetic that only exists on
+              // the other axis; `percentSeries` is empty there, so the two arms never
+              // answer the same point.
+              const point = percentSeries[ctx.datasetIndex]?.[ctx.dataIndex];
+              if (point) return `${ctx.dataset.label ?? ''}: ${t('songs_percent_caption', { count: formatPercent(point.percent) })}`;
               const session = seriesSessions[ctx.datasetIndex]?.[ctx.dataIndex];
               if (!session) return ctx.dataset.label ?? '';
               return `${ctx.dataset.label}: ${ctx.parsed.y} ${t('bpm_unit')} · ${session.bpm} × ${session.clicks_per_beat} · ${tensionLabel(session.tension_level)}`;
@@ -214,13 +279,15 @@ export function ProgressChart({ exercises, sessions, period, compact = false }: 
         },
       },
     };
-  }, [seriesSessions, withYear, unit, compact, narrow]);
+  }, [seriesSessions, percentSeries, percent, withYear, unit, compact, narrow]);
 
   if (!hasData) {
     return (
       <div className="text-center py-10">
         <p className="text-sm text-gray-400 dark:text-gray-500">
-          {t(hasAnySession ? 'chart_empty_period' : 'chart_empty')}
+          {percent
+            ? t(hasAnyPoint ? 'song_chart_empty_period' : 'song_chart_empty')
+            : t(hasAnySession ? 'chart_empty_period' : 'chart_empty')}
         </p>
       </div>
     );

@@ -30,7 +30,11 @@ describe('the owner column', () => {
   // not moved yet, which is the whole point of section 3 of the migration.
   test('the column stays nullable, so the legacy log survives the upgrade', () => {
     expect(sql).not.toMatch(/SET NOT NULL/);
-    expect(typesSource.match(/user_id: string \| null;/g)).toHaveLength(2);
+    // Four types carry the nullable owner: the two tables this migration moved, plus
+    // `songs` and `song_progress_logs`, whose rows `20261102230000_add_song_progress.sql`
+    // stamps the same way. A fifth would mean a table shipping `user_id` NOT NULL in TS
+    // while SQL still allows the pre-auth row.
+    expect(typesSource.match(/user_id: string \| null;/g)).toHaveLength(4);
   });
 });
 
