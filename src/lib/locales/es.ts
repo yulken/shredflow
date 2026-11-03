@@ -125,7 +125,6 @@ export const ES = {
     nav_songs: 'Canciones',
     songs_title: 'Canciones',
     songs_subtitle: 'Cuánto de cada canción tocas a tempo',
-    songs_import_hint: 'Importa una tab de Songsterr con npm run import:songsterr <url>',
     new_song_button: 'Nueva canción',
     no_songs_title: 'Todavía no hay canciones',
     no_songs_text: 'Añade una canción para seguir los compases que tocas a tempo.',

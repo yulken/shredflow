@@ -100,6 +100,11 @@ supabase/         config.toml + migrations
   visitor reaches only the sign-in screen — the anon key grants no table access. The
   log written before sign-in existed has no owner; whoever signs in first claims it
   (`claim_legacy_rows()`), which is the intent for a single-owner tool.
+- **Song import.** Songsterr has no API and songsterr.com sends no CORS header, so a song's
+  structure cannot be read from the browser — the importer is a local script:
+  `npm run import:songsterr <url>` (or a bare songId), signed in with `SUPABASE_EMAIL` /
+  `SUPABASE_PASSWORD` from `.env`. It reads the tab's tempo per measure and never sends
+  `percent` or `user_id`; the DB triggers write both.
 - The spec, and the deliberate deviations from it, are in [requirements.md](requirements.md).
 - The dated record of what changed each day, with the verification evidence behind it, is in
   [docs/history.md](docs/history.md).

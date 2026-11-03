@@ -671,3 +671,13 @@ test wanting the real client must `vi.unmock`. A new assertion pins what Auth ma
 reading. 365 passed over 22 files; typecheck and lint clean. Verified the way CI runs it — a copy of the tree
 without `.env`: lint, typecheck, vitest 365 and the build all green. `npm run build` still bakes `VITE_*` as
 undefined in CI, and nothing deploys from CI, so that stays out of the gate.
+
+### 2026-11-03 Songs UI: the npm hint left the screen ✅
+
+`SongList.tsx` rendered `songs_import_hint` ("…with npm run import:songsterr <url>") permanently, even
+with songs already listed — dev tooling as UI copy, duplicated in EN/PT/ES. Removed from the screen and
+from the 3 dictionaries; the README Notes now carries the importer (why it is a script: Songsterr has no
+API and songsterr.com sends no CORS header, so the browser cannot read a tab). `song-list-source.test.ts`
+pins the absence instead of the presence (`not.toContain('npm run')`): the screen never sends a user to a
+terminal. The importer itself is unchanged — it exists exactly because of the CORS constraint. 365 passed
+over 22 files; typecheck, lint, build clean.

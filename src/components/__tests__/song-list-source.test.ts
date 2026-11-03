@@ -94,10 +94,11 @@ describe('the song form writes three columns', () => {
 
   test('the structure is not typed here', () => {
     // Measure-by-measure tempi come from the tab; a form that asked for them would be a worse
-    // import than the script, and 100 inputs is not a phone form.
+    // import than the script, and 100 inputs is not a phone form. The screen also does not send
+    // anyone to a terminal: the import command belongs to the repo, and the README points at it.
     expect(list).not.toContain('field_start_measure');
     expect(list).not.toContain('field_end_measure');
-    expect(list).toContain('songs_import_hint');
+    expect(list).not.toContain('npm run');
   });
 
   test('the length is bounded the way the migration bounds it', () => {

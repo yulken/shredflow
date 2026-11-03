@@ -117,7 +117,6 @@ export const EN = {
     nav_songs: 'Songs',
     songs_title: 'Songs',
     songs_subtitle: 'How much of each song you can play at tempo',
-    songs_import_hint: 'Import a Songsterr tab with npm run import:songsterr <url>',
     new_song_button: 'New song',
     no_songs_title: 'No songs yet',
     no_songs_text: 'Add a song to track the measures you can play at tempo.',

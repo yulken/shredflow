@@ -122,10 +122,9 @@ export function SongList({ onSelectSong }: Props) {
             {t('songs_subtitle')}
           </p>
           {/* The structure is not typed here: it comes from the tab, measure by measure, and
-              a hand-typed 100 rows would be a worse import than the script. */}
-          <p className="mt-1 text-xs text-gray-400 dark:text-gray-500 font-mono">
-            {t('songs_import_hint')}
-          </p>
+              a hand-typed 100 rows would be a worse import than the script. The screen does
+              not name the script either — pointing a user at a terminal command is repo
+              tooling, and the README carries it. */}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2">
           <div role="group" aria-label={t('list_order_label')} className="flex flex-wrap items-center gap-1">

@@ -196,9 +196,9 @@ Phase C, where the derived fallback there stays only for pre-migration rows.
 - **Open — the October browser pass.** Recorded on 2026-10-31 (chart against the legacy spreadsheet, the tab
   URL write, the visibility toggle, the legend column, the Sunday gridlines, date-only tooltips, the four
   period buttons) and never marked closed. Its detail is in `docs/history.md`.
-- **Open — the docs commit.** This file plus `docs/history.md` are staged, to be committed signed in Caio's
-  terminal.
-- Everything dated lives in **`docs/history.md`** — 26 entries from 2026-10-28 to 2026-11-03, ordered by
+- **Closed — the commits.** The CI fix and the docs split landed signed as `622240b` (2026-11-03); the
+  Songs UI change is the work in progress, to be committed signed too.
+- Everything dated lives in **`docs/history.md`** — 28 entries from 2026-10-28 to 2026-11-03, ordered by
   day. The old §9 moved there whole; nothing was summarized away.
 
 ## 10. How a record is written

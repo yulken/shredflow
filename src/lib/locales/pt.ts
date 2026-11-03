@@ -121,7 +121,6 @@ export const PT = {
     nav_songs: 'Músicas',
     songs_title: 'Músicas',
     songs_subtitle: 'Quanto de cada música você toca no tempo',
-    songs_import_hint: 'Importe uma tab do Songsterr com npm run import:songsterr <url>',
     new_song_button: 'Nova música',
     no_songs_title: 'Nenhuma música ainda',
     no_songs_text: 'Adicione uma música para acompanhar as medidas que você toca no tempo.',
