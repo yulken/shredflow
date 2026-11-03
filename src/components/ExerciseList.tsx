@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { Plus, Music2, Pencil, Trash2, X, Activity, Gauge, Clock, ExternalLink, Eye, EyeOff, TrendingUp } from 'lucide-react';
+import { Plus, Music2, Pencil, Trash2, X, Activity, Gauge, Clock, Eye, EyeOff, TrendingUp } from 'lucide-react';
 import { supabase, type Exercise } from '@/lib/supabase';
-import { t, tp, categories, CATEGORY_CANONICAL, categoryLabel } from '@/lib/i18n';
+import { t, tp, categories, CATEGORY_CANONICAL, categoryLabel, dateLocale } from '@/lib/i18n';
 
 type Props = {
   onSelectExercise: (exercise: Exercise) => void;
@@ -13,6 +13,7 @@ export function ExerciseList({ onSelectExercise }: Props) {
   const [showForm, setShowForm] = useState(false);
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [sessionCounts, setSessionCounts] = useState<Record<string, number>>({});
+  const [lastSessions, setLastSessions] = useState<Record<string, string>>({});
 
   const fetchExercises = async () => {
     setLoading(true);
@@ -25,16 +26,23 @@ export function ExerciseList({ onSelectExercise }: Props) {
       console.error('Erro ao carregar exercícios:', error);
     } else {
       setExercises(data || []);
-      // Fetch session counts for each exercise
+      // Session count and newest session per exercise, from one read: the card
+      // footer shows both, and the trigger only keeps the last BPM, not the date.
       if (data && data.length > 0) {
         const counts: Record<string, number> = {};
+        const lasts: Record<string, string> = {};
         const { data: sessions } = await supabase
           .from('practice_sessions')
-          .select('exercise_id');
-        (sessions || []).forEach((s: { exercise_id: string }) => {
+          .select('exercise_id, created_at');
+        (sessions || []).forEach((s: { exercise_id: string; created_at: string }) => {
           counts[s.exercise_id] = (counts[s.exercise_id] || 0) + 1;
+          // ISO timestamps sort as strings, so this picks the newest session.
+          if (!lasts[s.exercise_id] || s.created_at > lasts[s.exercise_id]) {
+            lasts[s.exercise_id] = s.created_at;
+          }
         });
         setSessionCounts(counts);
+        setLastSessions(lasts);
       }
     }
     setLoading(false);
@@ -105,7 +113,18 @@ export function ExerciseList({ onSelectExercise }: Props) {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {exercises.map((exercise, idx) => (
+          {exercises.map((exercise, idx) => {
+            // Newest session formatted like the session history reads it: day +
+            // short month, year only when it is not the current year.
+            const lastDate = lastSessions[exercise.id] ? new Date(lastSessions[exercise.id]) : null;
+            const lastDateStr = lastDate
+              ? lastDate.toLocaleDateString(dateLocale(), {
+                  day: '2-digit',
+                  month: 'short',
+                  year: lastDate.getFullYear() === new Date().getFullYear() ? undefined : 'numeric',
+                })
+              : null;
+            return (
             // Hover effects only where hovering is a real input: on touch, `:hover`
             // sticks after the tap and the card would stay lifted.
             <div
@@ -114,10 +133,13 @@ export function ExerciseList({ onSelectExercise }: Props) {
               style={{ animationDelay: `${idx * 50}ms` }}
               onClick={() => onSelectExercise(exercise)}
             >
-              <div className="flex items-start justify-between mb-3">
-                <div className="inline-flex items-center justify-center h-11 w-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700 text-white shadow-md">
-                  <Music2 className="h-5 w-5" />
-                </div>
+              {/* Title at the left edge, edit and delete at the right. The note tile
+                  that led the card carried nothing about the exercise - no artwork, no
+                  tab, no category - so the title took its place as the card's anchor. */}
+              <div className="flex items-start justify-between gap-3 mb-1">
+                <h3 className="min-w-0 flex-1 text-lg font-semibold text-gray-900 dark:text-white line-clamp-2">
+                  {exercise.title}
+                </h3>
                 {/* Visible wherever there is no hover to reveal them - edit and delete
                     are the only way to change or remove an exercise, so a hover-only
                     pair is unreachable on a phone. */}
@@ -139,71 +161,63 @@ export function ExerciseList({ onSelectExercise }: Props) {
                 </div>
               </div>
 
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1 line-clamp-1">
-                {exercise.title}
-              </h3>
               {exercise.description && (
                 <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">
                   {exercise.description}
                 </p>
               )}
 
-              {/* Two rows of chips, both wrapping: at 360px a single line of goal +
-                  max + last + session count overflows the card and drags the page
-                  sideways, and a tab link beside an off-chart badge does the same. */}
-              <div className="flex flex-wrap items-center gap-2 mb-3">
-                {exercise.tab_url && (
-                  <a
-                    href={exercise.tab_url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex items-center gap-1 text-xs font-medium text-brand-600 dark:text-brand-400 hover:underline"
-                    aria-label={t('link_tab_aria')}
-                  >
-                    <ExternalLink className="h-3.5 w-3.5" />
-                    {t('field_tab_url')}
-                  </a>
-                )}
-                {!exercise.dashboard_visible && (
+              {/* Only the off-chart badge leads this row: the tab link left the
+                  card (the tab opens on the session screen), and the row stays
+                  wrapping so a chip added later cannot drag the page sideways. */}
+              {!exercise.dashboard_visible && (
+                <div className="flex flex-wrap items-center gap-2 mb-3">
                   <span className="flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400 ml-auto">
                     <EyeOff className="h-3 w-3" />
                     {t('badge_off_chart')}
                   </span>
-                )}
-              </div>
+                </div>
+              )}
 
-              <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
-                {exercise.category && (
-                  <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
-                    {categoryLabel(exercise.category)}
-                  </span>
-                )}
-                {exercise.target_bpm && (
-                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                    <Gauge className="h-3.5 w-3.5" />
-                    {t('goal_line', { bpm: exercise.target_bpm })}
-                  </span>
-                )}
-                {exercise.max_bpm !== null && (
-                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                    <TrendingUp className="h-3.5 w-3.5" />
-                    {t('stat_max_bpm')} · {exercise.max_bpm}
-                  </span>
-                )}
-                {exercise.last_bpm !== null && (
-                  <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
-                    <Clock className="h-3.5 w-3.5" />
-                    {t('stat_last_bpm')} · {exercise.last_bpm}
-                  </span>
-                )}
-                <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400 ml-auto">
+              {/* Footer on one wrapping row: the stat chips stay left, the session
+                  block hangs right over the divider, and at 360px it wraps as a
+                  whole unit onto the next line instead of floating alone at the
+                  right edge like `ml-auto` inside the chip line did. */}
+              <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  {exercise.category && (
+                    <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
+                      {categoryLabel(exercise.category)}
+                    </span>
+                  )}
+                  {exercise.target_bpm && (
+                    <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                      <Gauge className="h-3.5 w-3.5" />
+                      {t('goal_line', { bpm: exercise.target_bpm })}
+                    </span>
+                  )}
+                  {exercise.max_bpm !== null && (
+                    <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                      <TrendingUp className="h-3.5 w-3.5" />
+                      {t('stat_max_bpm')} · {exercise.max_bpm}
+                    </span>
+                  )}
+                  {exercise.last_bpm !== null && (
+                    <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
+                      <Clock className="h-3.5 w-3.5" />
+                      {t('stat_last_bpm')} · {exercise.last_bpm}
+                    </span>
+                  )}
+                </div>
+                <span className="flex items-center gap-1 text-xs text-gray-500 dark:text-gray-400">
                   <Activity className="h-3.5 w-3.5" />
                   {tp('sessions_count', sessionCounts[exercise.id] || 0)}
+                  {lastDateStr && <>· {t('last_session_short')} {lastDateStr}</>}
                 </span>
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

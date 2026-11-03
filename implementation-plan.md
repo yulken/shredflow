@@ -577,3 +577,22 @@ Phase C, where the derived fallback there stays only for pre-migration rows.
     classes and key existence in all three dictionaries; `auth-source.test.ts` rewritten for the
     move. `vitest` 203 passed (15 files); `eslint`, `tsc --noEmit` clean. Browser pass (Settings at
     320px, sign-out from Settings, preferences surviving sign-out) is Caio's.
+- **2026-11-02 The decorative note left the catalog** ✅ — Caio: the icon "makes no sense here, we
+  have no image for it". Scope decided with him: the card tile and the small note before every
+  dashboard row go; the empty-state tile stays, where the note marks "no catalog yet" beside the
+  button that adds one. No migration, no i18n, no new keys.
+  - `ExerciseList.tsx`: the tile (`h-11 w-11 rounded-xl bg-gradient-to-br from-brand-500 to-brand-700`)
+    is gone and the title took its role as the card's anchor — the first row is now the title at the
+    left edge (`min-w-0 flex-1 line-clamp-1`) and the edit/delete pair at the right, so the second
+    `<h3>` that repeated the name below the tile was removed with it.
+  - `Dashboard.tsx`: both row shapes dropped `Music2 h-4 w-4 text-brand-500 shrink-0`; the
+    `flex items-center gap-2` wrapper collapsed to the bare title span, which still clamps to one
+    line. Leaving one of the two would have kept the note on the rows the cards no longer show.
+  - Tests: nothing claimed the tile, so the removal broke none. `touch-targets.test.ts` gained two:
+    the card header row (`justify-between gap-3`, `min-w-0 flex-1`) with a single `{exercise.title}`
+    and no tile classes, the empty-state tile still present; and Dashboard carrying no `Music2` with
+    the title leading both row shapes.
+  - `requirements.md` untouched — the 2026-11-02 note that names "the row's icon" stays as dated
+    history of what was there, not a description of it.
+  - `eslint`, `tsc --noEmit` clean; `vitest` 205 passed (15 files). Browser pass (cards with the
+    title at the top, dashboard rows clean at 360px) is Caio's.

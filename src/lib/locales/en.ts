@@ -75,6 +75,7 @@ export const EN = {
     real_bpm_label: 'Real BPM',
     field_clicks: 'Clicks per beat',
     stat_last_bpm: 'Last BPM',
+    last_session_short: 'last',
     stat_max_bpm: 'Max BPM',
     field_tab_url: 'Tab URL',
     placeholder_tab_url: 'https://example.com/tab',

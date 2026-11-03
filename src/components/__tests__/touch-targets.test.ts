@@ -70,11 +70,40 @@ describe('the header fits a narrow screen', () => {
 
 describe('a card fits the width it is given', () => {
   test('its chip rows wrap instead of pushing sideways', () => {
-    // Goal + max + last + session count on one line exceed a 360px card, and a
-    // tab link beside the off-chart badge does the same; overflow spills the
-    // page into a sideways drag. Both wrap, keeping `ml-auto` on the trailing chip.
+    // Goal + max + last exceed a 360px card on one line; overflow spills the
+    // page into a sideways drag. The stat chips wrap inside a left group and
+    // the session block hangs right over the divider as one unit, so a phone
+    // wraps it onto the next line instead of floating it alone at the edge.
     expect(list).toContain('flex flex-wrap items-center gap-x-3');
     expect(list).toContain('flex flex-wrap items-center gap-2');
+    // The tab anchor left the card: the tab opens on the session screen, and
+    // a second way to navigate on a tap that already opens the exercise is noise.
+    expect(list).not.toContain('link_tab_aria');
+  });
+
+  test('the title leads the card where the note tile used to', () => {
+    // The tile carried no artwork, no tab and no category, so it read as
+    // decoration; the title now sits at the left edge of the same row as the
+    // edit/delete pair, and `min-w-0 flex-1` keeps a long name from pushing the
+    // buttons out of the card. The empty state keeps its tile - there the note
+    // says "no catalog yet", beside the button that adds one.
+    expect(list).toContain('flex items-start justify-between gap-3 mb-1');
+    expect(list).toContain('min-w-0 flex-1 text-lg font-semibold');
+    expect(list.match(/\{exercise\.title\}/g)).toHaveLength(1);
+    expect(list).not.toContain('h-11 w-11');
+    expect(list).not.toMatch(/from-brand-500 to-brand-700/);
+    expect(list).toContain('<Music2 className="h-8 w-8" />');
+  });
+});
+
+describe('the dashboard rows carry only what the exercise stores', () => {
+  test('the name leads both row shapes with no icon in front', () => {
+    // The same decorative note the cards dropped sat before every row, at 16px in
+    // the brand color - it read as a bullet, not as information. The table row and
+    // the stacked row now start on the title itself.
+    expect(dashboard).not.toContain('Music2');
+    expect(dashboard).toContain('font-medium text-gray-900 dark:text-white line-clamp-1');
+    expect(dashboard.match(/\{exercise\.title\}/g)).toHaveLength(2);
   });
 });
 

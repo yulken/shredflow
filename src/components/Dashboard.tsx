@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { BarChart3, Music2, Eye, EyeOff } from 'lucide-react';
+import { BarChart3, Eye, EyeOff } from 'lucide-react';
 import { supabase, type Exercise, type PracticeSession } from '@/lib/supabase';
 import { t } from '@/lib/i18n';
 import { PERIODS, PERIOD_LABEL_KEYS } from '@/lib/period';
@@ -161,14 +161,12 @@ export function Dashboard({ onSelectExercise }: Props) {
                       {/* Title and nothing else: the tab lives on the exercise's own
                           screen, which shows the link and edits it, and this row is the
                           way there. A link here would float mid-line beside the title and
-                          need its own click guard against the row's navigation. */}
+                          need its own click guard against the row's navigation. The note
+                          icon that used to lead the row said nothing about the exercise. */}
                       <td className="py-3 pr-4">
-                        <div className="flex items-center gap-2 min-w-0">
-                          <Music2 className="h-4 w-4 text-brand-500 shrink-0" />
-                          <span className="font-medium text-gray-900 dark:text-white line-clamp-1">
-                            {exercise.title}
-                          </span>
-                        </div>
+                        <span className="font-medium text-gray-900 dark:text-white line-clamp-1">
+                          {exercise.title}
+                        </span>
                       </td>
                       <td className="py-3 pr-4 text-right font-semibold text-gray-900 dark:text-white">
                         {exercise.max_bpm ?? '\u2014'}
@@ -196,12 +194,9 @@ export function Dashboard({ onSelectExercise }: Props) {
                   className="flex items-center gap-3 py-3 cursor-pointer active:scale-95 transition-colors"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <Music2 className="h-4 w-4 text-brand-500 shrink-0" />
-                      <span className="font-medium text-gray-900 dark:text-white line-clamp-1">
-                        {exercise.title}
-                      </span>
-                    </div>
+                    <span className="font-medium text-gray-900 dark:text-white line-clamp-1">
+                      {exercise.title}
+                    </span>
                     <div className="mt-1 flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
                       <span>{t('stat_max_bpm')} · {exercise.max_bpm ?? '\u2014'}</span>
                       <span>{t('stat_last_bpm')} · {exercise.last_bpm ?? '\u2014'}</span>

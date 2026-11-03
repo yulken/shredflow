@@ -79,6 +79,7 @@ export const PT = {
     real_bpm_label: 'BPM real',
     field_clicks: 'Cliques por batida',
     stat_last_bpm: 'Último BPM',
+    last_session_short: 'última',
     stat_max_bpm: 'Máximo BPM',
     field_tab_url: 'URL da tab',
     placeholder_tab_url: 'https://example.com/tab',

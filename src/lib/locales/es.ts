@@ -83,6 +83,7 @@ export const ES = {
     real_bpm_label: 'BPM real',
     field_clicks: 'Clics por beat',
     stat_last_bpm: 'Último BPM',
+    last_session_short: 'última',
     stat_max_bpm: 'Máximo BPM',
     field_tab_url: 'URL del tab',
     placeholder_tab_url: 'https://example.com/tab',
