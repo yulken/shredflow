@@ -101,3 +101,5 @@ supabase/         config.toml + migrations
   log written before sign-in existed has no owner; whoever signs in first claims it
   (`claim_legacy_rows()`), which is the intent for a single-owner tool.
 - The spec, and the deliberate deviations from it, are in [requirements.md](requirements.md).
+- The dated record of what changed each day, with the verification evidence behind it, is in
+  [docs/history.md](docs/history.md).

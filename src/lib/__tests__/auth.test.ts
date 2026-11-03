@@ -49,6 +49,16 @@ describe('the surface the form uses', () => {
     // that has to be clicked, so it is read off the response, not guessed.
     expect(authSource).toContain('needsConfirmation: data.session === null');
   });
+
+  test('a response with no session in it comes back as needing confirmation', async () => {
+    // The client behind these calls is the stub in `src/__tests__/setup.ts`, so this asserts what Auth
+    // makes of a response, not what Supabase sends: an empty response means the mail is the next step
+    // after a signup, and a sign-in that succeeded never claims it does. Without this the stub could
+    // answer any shape at all and the suite would stay green while Auth read a field that stopped
+    // existing.
+    await expect(signUp('me@shredflow.app', 'abcdef')).resolves.toEqual({ ok: true, needsConfirmation: true });
+    await expect(signIn('me@shredflow.app', 'abcdef')).resolves.toEqual({ ok: true, needsConfirmation: false });
+  });
 });
 
 describe('the error mapping answers from the dictionaries', () => {
