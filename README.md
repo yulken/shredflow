@@ -13,7 +13,11 @@ same arithmetic by hand.
 
 - **Sign in** — email + password: create an account, sign out from Settings. The catalog and the session log belong to the account that wrote them.
 - **Settings view** — theme, language and sign-out live on their own screen, next to the account's email; the header carries navigation only. A signed-out visitor still picks theme and language on the auth card, and both choices persist in the browser.
-- **Exercise catalog** — CRUD with category, target BPM, description and a tablature link.
+- **Exercise catalog** — CRUD with category, target BPM, description and a tablature link. A quiet
+  check in the card's stat row marks the exercises that already have a record today; it is read off
+  the log, so yesterday's record stops being marked at midnight. The list can be shown by the most
+  recent session of each exercise or by the total number of sessions it has logged; the choice is a
+  preference kept on the device, not a field of the exercise.
 - **Session log** — base BPM, clicks per beat (1 / 2 / 4 / 6), hand tension (1 relaxed → 3 tense), free-form notes. The session date is the day you write it. The exercise's own Real BPM chart and its tab link sit on the same screen, and the link can be stored or edited there.
 - **Dashboard** — a multi-series line chart, one series per exercise, Y = Real BPM, X = the logged day, with `last month / last 3 months / last year / all data` windows.
 - **Chart visibility** — the eye toggle on each row puts that exercise on or off the chart.

@@ -2,16 +2,19 @@ import { describe, expect, test } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { DAY_MS, msUntilMidnight } from '@/lib/clock';
+import { DAY_MS, isSameLocalDay, msUntilMidnight } from '@/lib/clock';
 
 // Pure arithmetic over a clock handed in, like `period.test.ts`: nothing here reads
 // `Date.now()`, so the wait cannot drift with the machine's timezone or with the
 // hour the suite runs at. Dates are built from local calendar fields - the day-local
 // clock the X axis plots, and the boundary the refresh turns on.
 //
-// The two rules the module states as code rather than prose: midnight is never a
-// zero wait, and a sub-second wait is floored. Both are about one round trip per
-// rollover, which is what a spinning timer would break.
+// The rules the module states as code rather than prose: midnight is never a
+// zero wait, a sub-second wait is floored, and a session's day is the local
+// calendar day. All three are about one record per day - the first two keep the
+// rollover to a single refresh, the third is what turns a second save on the same
+// day into an edit of the day's row. Both boundary rules are about one round trip
+// per rollover, which is what a spinning timer would break.
 
 // Local fields, so no zone is involved.
 const day = (h: number, m = 0, s = 0, ms = 0) => new Date(2026, 10, 2, h, m, s, ms);
@@ -51,6 +54,40 @@ describe('the boundary is the next local midnight', () => {
     // deadline a stale tab would fire on the day after.
     expect(msUntilMidnight(new Date(2026, 10, 1, 13))).toBe(msUntilMidnight(day(13)));
     expect(msUntilMidnight(new Date(2026, 10, 3, 13))).toBe(msUntilMidnight(day(13)));
+  });
+});
+
+// `SessionView` asks this which row is today's: the row it may rewrite is the one
+// logged today, and a second save on the same day must not become a second record.
+describe('one session belongs to one local day', () => {
+  // The day is read off the calendar fields, not off an elapsed duration: the two
+  // ends of a day are still the same day, and two moments two hours apart that
+  // straddle midnight are not.
+  test('the whole day is one day, whatever the hour apart', () => {
+    expect(isSameLocalDay(day(0), day(23, 59, 59, 999))).toBe(true);
+    expect(isSameLocalDay(day(13), day(13))).toBe(true);
+  });
+
+  // Midnight is the boundary the rollover fires on, so it is also the boundary the
+  // day's row stops being today's.
+  test('a moment past midnight is the next day', () => {
+    expect(isSameLocalDay(day(23, 59, 59, 999), new Date(2026, 10, 3, 0, 0, 0, 0))).toBe(false);
+    expect(isSameLocalDay(day(13), new Date(2026, 10, 1, 13))).toBe(false);
+  });
+
+  // The fields compared are year, month and day: the same calendar day in another
+  // year is another day, so a stale row cannot pass as today's.
+  test('the year is part of the day, not just the month and the day', () => {
+    expect(isSameLocalDay(day(13), new Date(2025, 10, 2, 13))).toBe(false);
+    expect(isSameLocalDay(day(13), new Date(2026, 9, 2, 13))).toBe(false);
+  });
+
+  // Which of the two is `now` is not the question - the screen compares a row's
+  // timestamp against the clock, in either reading order.
+  test('the comparison is symmetric', () => {
+    const row = new Date('2026-11-02T18:30:00');
+    expect(isSameLocalDay(row, day(9))).toBe(isSameLocalDay(day(9), row));
+    expect(isSameLocalDay(row, new Date(2026, 10, 3))).toBe(isSameLocalDay(new Date(2026, 10, 3), row));
   });
 });
 

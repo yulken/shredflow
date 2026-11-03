@@ -15,3 +15,15 @@ export function msUntilMidnight(now: Date): number {
   next.setHours(24, 0, 0, 0);
   return Math.max(next.getTime() - now.getTime(), MIN_DELAY_MS);
 }
+
+/** Whether two moments fall on the same local calendar day - the unit a session is
+ * logged in. The comparison is on the calendar fields rather than on an instant, so
+ * a 23:59 row and a 00:01 row never count as one day, and the machine's zone is the
+ * zone the user practices in, the same one `msUntilMidnight` turns on. */
+export function isSameLocalDay(a: Date, b: Date): boolean {
+  return (
+    a.getFullYear() === b.getFullYear() &&
+    a.getMonth() === b.getMonth() &&
+    a.getDate() === b.getDate()
+  );
+}

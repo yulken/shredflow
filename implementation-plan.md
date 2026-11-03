@@ -596,3 +596,77 @@ Phase C, where the derived fallback there stays only for pre-migration rows.
     history of what was there, not a description of it.
   - `eslint`, `tsc --noEmit` clean; `vitest` 205 passed (15 files). Browser pass (cards with the
     title at the top, dashboard rows clean at 360px) is Caio's.
+- **2026-11-02 A check for the exercise practiced today** ✅ — Caio: the exercise list should mark
+  the exercises practiced on the current day. Scope decided with him: icon only (its name reaches a
+  screen reader and the tooltip), and only the exercise list carries it — the dashboard rows stay
+  title / Max / Last / eye. No migration, no new column. Revised the same day: Caio moved the check
+  down to the card's stat row and asked for it quieter, so the tile beside the title became a bare
+  icon leading the chips.
+  - The fact is derived, not stored: `fetchExercises` already reads every `practice_sessions` row to
+    count sessions and find the newest one, so the day flag comes off that same read —
+    `isSameLocalDay(new Date(lasts[id]), now)` (`src/lib/clock.ts`), the rule `SessionView.tsx` uses
+    for the one-record-per-day guard. One record per exercise per day makes "the newest row falls on
+    today" the same fact as "a row exists today", so no future row and no second query.
+  - `ExerciseList.tsx`: `fetchExercises` became `fetchData` (`useCallback` over nothing, `background`
+    argument, `inFlight` guard) and the screen schedules `useDayRollover` + `useRefreshOnVisible` like
+    `Dashboard.tsx` — a list left open past midnight would otherwise go on marking yesterday, and a
+    record logged on another device shows when the tab is looked at again. The explicit re-read after
+    a save or a delete still runs (`if (background && inFlight.current) return`).
+  - The mark: a 14px `Check` in accent green (`text-accent-600 dark:text-accent-500`), leading the
+    chip group below the divider — the same line as `Max BPM` / `Last BPM` and the session count,
+    which is the row that already reports the day. No tile and no background: a badge there would
+    compete with the chips beside it. `role="img"` + `aria-label`/`title` because green alone is not a
+    name and a phone has no hover. Status, not a control: the card already opens the exercise on the
+    same tap, so it carries no `stopPropagation` and no pseudo hit area.
+  - Keys: `practiced_today` × en/pt/es, no new placeholder.
+  - Tests: `exercise-list-source.test.ts` (new, 24) pins the day rule read from `clock.ts` (no UTC
+    string slicing), one clock per refresh, the flag-gated render, the mark sitting on the stat row
+    with no badge classes and no click guard, the refresh wiring and its stable identity, and the key
+    existing in all three dictionaries. `vitest` 229 passed (16 files); `eslint`, `tsc --noEmit`,
+    `npm run build` clean. Browser pass (check appearing after a save, clearing at midnight, the
+    label in PT/ES) is Caio's.
+- **2026-11-02 An order control on the exercise list** ✅ — Caio: the list should also sort by the
+  total number of logged sessions. Decided with him: a control that alternates between the two
+  orders rather than always sorting by count, and the dashboard's catalog untouched. Revised the same
+  day: creation date is not a parameter a practice log is ordered by, so `Recentes` became the
+  exercises with the most recent sessions — the tie-break now ends on creation date only among
+  exercises that never logged a row.
+  - `src/lib/order.ts` (new): `ListOrder` (`recent` | `most_sessions`), `LIST_ORDERS`,
+    `DEFAULT_LIST_ORDER = 'recent'`, `LIST_ORDER_LABEL_KEYS`, `LIST_ORDER_STORAGE_KEY`,
+    `isListOrder` and `orderedExercises(exercises, order, counts, lasts)`. The comparison is pure and
+    copies the array. `recent` sorts by the exercise's newest session; `most_sessions` by its count,
+    then the same tie-break: newest session first, and among exercises with no row the newer
+    `created_at`. So both orders are total, and a run of equal counts or a run of never-logged
+    exercises keeps the order the read returned. An exercise with no row counts as zero and lands
+    last — never practiced is not "practiced long ago".
+  - Sorting happens client-side because the REST API cannot order a parent row by its children —
+    neither by how many rows they are nor by the newest timestamp, and neither is a field of
+    `exercises`. It costs no round trip: the screen already reads every `practice_sessions` row for
+    the session chips and the day check, so `orderedExercises` sorts data already in state, and a
+    click changes the view without touching the database.
+  - `src/hooks/useListOrder.ts` (new): same shape as `useChartPeriod.ts` — read once at mount,
+    validated by `isListOrder` so a stale or hand-edited value cannot reach the list as an order no
+    button names, written back on change, `try/catch` around storage.
+  - `ExerciseList.tsx`: the header gained a `role="group"` pair of pressed buttons (`aria-pressed`),
+    reusing the dashboard's period-button classes, beside the New-exercise button; the header now
+    wraps below `sm`, since title + order + button do not share 360px. The grid maps `rows`, not
+    `exercises`. The read still asks for `created_at` descending, and now only as the last tie-break:
+    without an `ORDER BY` Postgres returns whatever it likes, and exercises with no session have
+    nothing on the log to compare.
+  - Keys: `list_order_label`, `order_recent`, `order_most_sessions` × en/pt/es, no new placeholder.
+    PT/ES say "sessões"/"sesiones" because the card already counts `sessões`; the note in
+    `requirements.md` keeps the count's own wording as written, so the label follows the UI, not the
+    prose.
+  - Tests: `src/lib/__tests__/order.test.ts` (new, 19) pins the set of orders and its landing on the
+    newest workout, label keys resolving in all three dictionaries, the storage key differing from the
+    chart's, `isListOrder` refusing junk, a log deliberately upside down against creation so `recent`
+    follows the sessions not the `created_at`, never-logged exercises landing last and ordered among
+    themselves by creation, equal session timestamps keeping the read's order, counts descending with
+    an absent id as zero, counts moving nothing in `recent`, the input array unmutated, both orders
+    returning a permutation, and a new session moving an exercise to the front of both.
+    `exercise-list-source.test.ts` gained five: the rules read from `lib/order` with no `.sort(` in the
+    screen, the sort reading counts and newest session already in state with one session read, the
+    group with `aria-pressed` and no `<select>`, persistence living in the hook with the list's only
+    write still the visibility flag, and the dashboard importing nothing from `order`.
+  - `vitest` 251 passed (17 files); `eslint`, `tsc --noEmit`, `npm run build` clean. Browser pass
+    (the two buttons swapping the grid, the choice surviving a reload and the PT/ES labels) is Caio's.

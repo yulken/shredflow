@@ -4,6 +4,7 @@ import { supabase, type Exercise, type PracticeSession } from '@/lib/supabase';
 import { t, tp, dateLocale, categoryLabel } from '@/lib/i18n';
 import { tensionLabel, tensionColor } from '@/lib/tension';
 import { bpmStep, realBpm } from '@/lib/bpm';
+import { isSameLocalDay } from '@/lib/clock';
 import { ProgressChart } from '@/components/ProgressChart';
 import { useDayRollover } from '@/hooks/useDayRollover';
 import { useRefreshOnVisible } from '@/hooks/useRefreshOnVisible';
@@ -19,7 +20,10 @@ export function SessionView({ exercise, onBack }: Props) {
   const [clicks, setClicks] = useState(1);
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
-  const [saved, setSaved] = useState(false);
+  // Which write landed, not just that one did: the success line reads the state,
+  // and by the time it renders the day's row exists whichever way the save went,
+  // so "was this an edit" has to be remembered at the moment of the write.
+  const [saved, setSaved] = useState<'insert' | 'update' | null>(null);
   const [sessions, setSessions] = useState<PracticeSession[]>([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [tabUrl, setTabUrl] = useState<string | null>(exercise.tab_url);
@@ -76,6 +80,36 @@ export function SessionView({ exercise, onBack }: Props) {
   useDayRollover(refreshAll);
   useRefreshOnVisible(refreshAll);
 
+  // One record per exercise per day: the day's row is what the form writes. When
+  // today already has a row the form is its editor, so a second save updates that
+  // row instead of logging a second one for the day. `sessions` is newest-first,
+  // so `find` picks the day's row; the day is the local calendar day, the same
+  // boundary the rollover refresh turns on - past midnight the row stops being
+  // today's and the form goes back to writing a new record.
+  const todaySession = sessions.find((s) => isSameLocalDay(new Date(s.created_at), new Date()));
+
+  // The form mirrors the row it writes: the stored values when a day's record
+  // exists, the defaults when none does. Re-syncing is keyed on the row's identity,
+  // not on the fetch - a background refresh of the same row must not overwrite an
+  // edit the user is drafting. The comparison lives in a ref so the effect can take
+  // the row itself as its dependency and still fire once per identity change.
+  const syncedId = useRef<string | null>(null);
+  useEffect(() => {
+    if (todaySession?.id === syncedId.current) return;
+    syncedId.current = todaySession?.id ?? null;
+    if (todaySession) {
+      setTension(todaySession.tension_level);
+      setBpm(todaySession.bpm);
+      setClicks(todaySession.clicks_per_beat);
+      setNotes(todaySession.notes ?? '');
+    } else {
+      setTension(2);
+      setBpm(60);
+      setClicks(1);
+      setNotes('');
+    }
+  }, [todaySession]);
+
   // The tab URL is the one column this screen writes; the rest of the exercise row
   // belongs to the catalog form. Normalized at write time the same way the form
   // does it, so the link rendered here is a URL that was validated, not typed text.
@@ -99,27 +133,29 @@ export function SessionView({ exercise, onBack }: Props) {
     setTabError('');
   };
 
+  // The write is one row either way: an update of the day's record when it exists,
+  // an insert when the day is empty. The form's fields are not reset here - the
+  // sync effect owns them, and both outcomes (a new row appearing, the same row
+  // updated) leave the screen showing what the row actually holds.
   const handleSave = async () => {
     setSaving(true);
-    const { error } = await supabase.from('practice_sessions').insert({
-      exercise_id: exercise.id,
+    const fields = {
       tension_level: tension,
       bpm,
       clicks_per_beat: clicks,
       notes: notes.trim() || null,
-    });
+    };
+    const { error } = todaySession
+      ? await supabase.from('practice_sessions').update(fields).eq('id', todaySession.id)
+      : await supabase.from('practice_sessions').insert({ exercise_id: exercise.id, ...fields });
     setSaving(false);
     if (error) {
-      alert(t('error_save_session'));
+      alert(t(todaySession ? 'error_update_session' : 'error_save_session'));
       return;
     }
     await refreshAll();
-    setSaved(true);
-    setNotes('');
-    setTension(2);
-    setBpm(60);
-    setClicks(1);
-    setTimeout(() => setSaved(false), 2500);
+    setSaved(todaySession ? 'update' : 'insert');
+    setTimeout(() => setSaved(null), 2500);
   };
 
   const handleDeleteSession = async (id: string) => {
@@ -424,7 +460,13 @@ export function SessionView({ exercise, onBack }: Props) {
               />
             </div>
 
-            {/* Save button */}
+            {/* Save button. When the day already has a record the button names the
+                write it actually makes - an edit of that record, not a second one. */}
+            {todaySession && (
+              <p className="text-xs text-gray-400 mb-2 text-center">
+                {t('today_session_hint')}
+              </p>
+            )}
             <button
               onClick={handleSave}
               disabled={saving}
@@ -433,12 +475,12 @@ export function SessionView({ exercise, onBack }: Props) {
               {saved ? (
                 <>
                   <Activity className="h-5 w-5 text-accent-400" />
-                  {t('save_success')}
+                  {t(saved === 'update' ? 'update_success' : 'save_success')}
                 </>
               ) : (
                 <>
                   <Save className="h-5 w-5" />
-                  {saving ? t('saving') : t('save_session_button')}
+                  {saving ? t('saving') : todaySession ? t('edit_today_session_button') : t('save_session_button')}
                 </>
               )}
             </button>

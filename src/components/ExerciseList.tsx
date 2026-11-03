@@ -1,7 +1,12 @@
-import { useEffect, useState } from 'react';
-import { Plus, Music2, Pencil, Trash2, X, Activity, Gauge, Clock, Eye, EyeOff, TrendingUp } from 'lucide-react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { Plus, Music2, Pencil, Trash2, X, Activity, Gauge, Clock, Eye, EyeOff, TrendingUp, Check } from 'lucide-react';
 import { supabase, type Exercise } from '@/lib/supabase';
 import { t, tp, categories, CATEGORY_CANONICAL, categoryLabel, dateLocale } from '@/lib/i18n';
+import { isSameLocalDay } from '@/lib/clock';
+import { LIST_ORDERS, LIST_ORDER_LABEL_KEYS, orderedExercises } from '@/lib/order';
+import { useDayRollover } from '@/hooks/useDayRollover';
+import { useListOrder } from '@/hooks/useListOrder';
+import { useRefreshOnVisible } from '@/hooks/useRefreshOnVisible';
 
 type Props = {
   onSelectExercise: (exercise: Exercise) => void;
@@ -14,9 +19,31 @@ export function ExerciseList({ onSelectExercise }: Props) {
   const [editingExercise, setEditingExercise] = useState<Exercise | null>(null);
   const [sessionCounts, setSessionCounts] = useState<Record<string, number>>({});
   const [lastSessions, setLastSessions] = useState<Record<string, string>>({});
+  // Whether the exercise already has a record on the current day - the fact the
+  // card's check carries. Derived from the log, never stored on the exercise.
+  const [practicedToday, setPracticedToday] = useState<Record<string, boolean>>({});
+  // Which order the cards are shown in. A preference of this screen, persisted like the
+  // chart's period - it is not a field of the exercise and never reaches the database.
+  const { order, setOrder } = useListOrder();
 
-  const fetchExercises = async () => {
-    setLoading(true);
+  // Rows, counts and the day's record come off one read, so a refresh is one round
+  // trip. The identity is fixed (`useCallback` over nothing): the midnight timer
+  // re-anchors its deadline whenever the callback changes, and the form modal
+  // re-renders this screen, so a callback rebuilt every render would never fire.
+  const inFlight = useRef(false);
+  const fetchData = useCallback(async ({ background = false }: { background?: boolean } = {}) => {
+    // Two background triggers can land in the same instant - a focus and the
+    // midnight timer. The explicit re-read after a save or a delete always runs:
+    // the check the list has to show is the one just written or removed.
+    if (background && inFlight.current) return;
+    inFlight.current = true;
+    // A background refresh keeps the cards on screen: the skeleton would blank the
+    // list to show data that is usually about to be the same, and a failed one
+    // leaves the last good rows readable.
+    if (!background) setLoading(true);
+    // Creation order is not what the screen shows anymore, but the read still needs
+    // one: an unordered `select` is whatever Postgres returns, and the newest-created
+    // row is the last tie-break an order has - the one among exercises never logged.
     const { data, error } = await supabase
       .from('exercises')
       .select('*')
@@ -27,7 +54,8 @@ export function ExerciseList({ onSelectExercise }: Props) {
     } else {
       setExercises(data || []);
       // Session count and newest session per exercise, from one read: the card
-      // footer shows both, and the trigger only keeps the last BPM, not the date.
+      // footer shows both, the title's check is asked against that newest row, and
+      // the trigger only keeps the last BPM, not the date.
       if (data && data.length > 0) {
         const counts: Record<string, number> = {};
         const lasts: Record<string, string> = {};
@@ -43,14 +71,32 @@ export function ExerciseList({ onSelectExercise }: Props) {
         });
         setSessionCounts(counts);
         setLastSessions(lasts);
+        // Whether the day already holds a record: the session screen keeps one record
+        // per exercise per day, so the newest row of an exercise falling on today is
+        // the same fact as any row today. The clock is read once, so every exercise is
+        // asked against the same instant rather than a Date built per row.
+        const now = new Date();
+        const todays: Record<string, boolean> = {};
+        for (const id of Object.keys(lasts)) {
+          todays[id] = isSameLocalDay(new Date(lasts[id]), now);
+        }
+        setPracticedToday(todays);
       }
     }
-    setLoading(false);
-  };
+    if (!background) setLoading(false);
+    inFlight.current = false;
+  }, []);
 
   useEffect(() => {
-    fetchExercises();
-  }, []);
+    fetchData();
+  }, [fetchData]);
+
+  // The day is the unit a record is logged in, so it is the boundary a stale check
+  // turns on: past midnight the tile would name yesterday. `useRefreshOnVisible`
+  // covers the same-day half - a record logged on another device - and the return to
+  // this list from the exercise's own screen, where a save or a delete moves the day.
+  useDayRollover(fetchData);
+  useRefreshOnVisible(fetchData);
 
   const handleDelete = async (id: string) => {
     if (!confirm(t('confirm_delete_exercise'))) {
@@ -61,12 +107,20 @@ export function ExerciseList({ onSelectExercise }: Props) {
       alert(t('error_delete_exercise'));
       return;
     }
-    fetchExercises();
+    fetchData();
   };
+
+  // The cards in the order the control names. Counts and newest session arrive with the
+  // rows in one read, and the REST API cannot order an exercise by its session rows -
+  // neither by how many there are nor by the newest one - so the sort happens here, over
+  // data already in state. It copies, so the fetch's array stays as it was returned.
+  const rows = orderedExercises(exercises, order, sessionCounts, lastSessions);
 
   return (
     <div className="animate-fade-in">
-      <div className="flex items-center justify-between gap-3 mb-6 sm:mb-8">
+      {/* Wraps below sm: the title, the order control and the button do not share 360px,
+          so the controls drop to their own line instead of squeezing the title flat. */}
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6 sm:mb-8">
         <div className="min-w-0">
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white tracking-tight">
             {t('exercises_title')}
@@ -75,13 +129,37 @@ export function ExerciseList({ onSelectExercise }: Props) {
             {t('exercises_subtitle')}
           </p>
         </div>
-        <button
-          onClick={() => { setEditingExercise(null); setShowForm(true); }}
-          className="flex shrink-0 items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium shadow-lg shadow-brand-600/20 transition-all hover:scale-105 active:scale-95"
-        >
-          <Plus className="h-5 w-5" />
-          {t('new_exercise_button')}
-        </button>
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {/* The two orders are the whole set: `recent` leads with the newest workout,
+              which is what a practice log is asked for, so it is where the list lands.
+              Pressed state names which one is on screen - a single button that only said
+              "Order" would not. Same size as the chart's period buttons: both are
+              secondary choices beside a primary action, not the row's own tap. */}
+          <div role="group" aria-label={t('list_order_label')} className="flex flex-wrap items-center gap-1">
+            {LIST_ORDERS.map((o) => (
+              <button
+                key={o}
+                type="button"
+                onClick={() => setOrder(o)}
+                aria-pressed={order === o}
+                className={`px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors ${
+                  order === o
+                    ? 'bg-brand-50 dark:bg-brand-900/30 text-brand-600 dark:text-brand-400'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-white'
+                }`}
+              >
+                {t(LIST_ORDER_LABEL_KEYS[o])}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={() => { setEditingExercise(null); setShowForm(true); }}
+            className="flex shrink-0 items-center gap-2 px-4 py-2.5 sm:px-5 sm:py-3 rounded-xl bg-brand-600 hover:bg-brand-700 text-white font-medium shadow-lg shadow-brand-600/20 transition-all hover:scale-105 active:scale-95"
+          >
+            <Plus className="h-5 w-5" />
+            {t('new_exercise_button')}
+          </button>
+        </div>
       </div>
 
       {loading ? (
@@ -113,10 +191,11 @@ export function ExerciseList({ onSelectExercise }: Props) {
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          {exercises.map((exercise, idx) => {
+          {rows.map((exercise, idx) => {
             // Newest session formatted like the session history reads it: day +
             // short month, year only when it is not the current year.
             const lastDate = lastSessions[exercise.id] ? new Date(lastSessions[exercise.id]) : null;
+            const practiced = practicedToday[exercise.id] ?? false;
             const lastDateStr = lastDate
               ? lastDate.toLocaleDateString(dateLocale(), {
                   day: '2-digit',
@@ -185,6 +264,21 @@ export function ExerciseList({ onSelectExercise }: Props) {
                   right edge like `ml-auto` inside the chip line did. */}
               <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1.5 mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                 <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+                  {/* The day's record, on the same line as the stored records it belongs
+                      to. Bare icon, no tile and no background: a badge here would compete
+                      with the chips beside it, and green is loud enough on its own at 14px.
+                      `role="img"` names it for a reader color cannot reach; status, not a
+                      control - the card already navigates on the same tap. */}
+                  {practiced && (
+                    <span
+                      role="img"
+                      aria-label={t('practiced_today')}
+                      title={t('practiced_today')}
+                      className="text-accent-600 dark:text-accent-500"
+                    >
+                      <Check className="h-3.5 w-3.5" />
+                    </span>
+                  )}
                   {exercise.category && (
                     <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300">
                       {categoryLabel(exercise.category)}
@@ -225,7 +319,7 @@ export function ExerciseList({ onSelectExercise }: Props) {
         <ExerciseForm
           exercise={editingExercise}
           onClose={() => { setShowForm(false); setEditingExercise(null); }}
-          onSaved={() => { setShowForm(false); setEditingExercise(null); fetchExercises(); }}
+          onSaved={() => { setShowForm(false); setEditingExercise(null); fetchData(); }}
         />
       )}
     </div>

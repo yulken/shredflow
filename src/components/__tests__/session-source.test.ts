@@ -65,6 +65,50 @@ describe('the session screen plots its own exercise', () => {
   });
 });
 
+describe('the day holds one record', () => {
+  // One record per exercise per day, enforced on the screen: the day's row is what
+  // the form writes, so a second save on the same day edits that row rather than
+  // logging another one. None of this is visible without reading the source - the
+  // edit path only runs when a row already exists, and a save that silently
+  // re-logged the day would look identical on screen.
+  test('the day is a local calendar day, spelled once', () => {
+    expect(view).toContain("from '@/lib/clock'");
+    expect(view).toMatch(/const todaySession = sessions\.find\(\(s\) => isSameLocalDay\(new Date\(s\.created_at\), new Date\(\)\)\)/);
+  });
+
+  test('a save edits the record of today when one exists', () => {
+    expect(view).toMatch(/\? await supabase\.from\('practice_sessions'\)\.update\(fields\)\.eq\('id', todaySession\.id\)/);
+  });
+
+  test('a save inserts only when the day is empty', () => {
+    expect(view).toMatch(/: await supabase\.from\('practice_sessions'\)\.insert\(\{ exercise_id: exercise\.id, \.\.\.fields \}\)/);
+  });
+
+  test('the write sends the form fields and no date', () => {
+    // The edited row keeps its own `created_at`: editing the day's record is not
+    // re-logging it, so the date stays the day the record was written (the session
+    // date note in `requirements.md`). The `exercise_id` belongs to the insert path,
+    // which needs it; the update is scoped by the row's own id.
+    expect(view).not.toMatch(/const fields = \{[^}]*exercise_id/);
+    expect(view).not.toMatch(/const fields = \{[^}]*created_at/);
+  });
+
+  test('the form syncs on the row identity, not on every fetch', () => {
+    // A background refresh re-reading the same row must not drop the edit the user
+    // is drafting; only a row appearing, changing or being deleted rewrites the form.
+    expect(view).toContain('const syncedId = useRef<string | null>(null);');
+    expect(view).toContain('if (todaySession?.id === syncedId.current) return;');
+  });
+
+  test('the button names the write it actually makes', () => {
+    expect(view).toContain("t('edit_today_session_button')");
+    expect(view).toContain("t('save_session_button')");
+    expect(view).toContain("t('today_session_hint')");
+    expect(view).toContain("t(saved === 'update' ? 'update_success' : 'save_success')");
+    expect(view).toContain("t(todaySession ? 'error_update_session' : 'error_save_session')");
+  });
+});
+
 describe('a session screen left open re-reads itself', () => {
   test('the screen schedules both boundaries', () => {
     expect(view).toContain('useDayRollover(refreshAll)');
@@ -123,8 +167,10 @@ describe('the tab URL on the session screen', () => {
   test('the write is one column, targeted by id', () => {
     // The rest of the row belongs to the catalog form: a payload that carried the
     // other fields would rewrite the exercise while only a URL was being stored.
+    // Counted on `exercises` only - the day's record is an update of a row in
+    // `practice_sessions`, a different table, pinned in `the day holds one record`.
     expect(/update\(\{ tab_url: value \}\)\.eq\('id', exercise\.id\)/.test(view)).toBe(true);
-    expect(view.match(/supabase\.from\([^)]*\)\.update/g)?.length).toBe(1);
+    expect(view.match(/supabase\.from\('exercises'\)\.update/g)?.length).toBe(1);
   });
 
   test('the value is validated before it is written', () => {

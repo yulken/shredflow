@@ -73,29 +73,36 @@ describe('realBpm()', () => {
 });
 
 describe('the SQL counterpart of realBpm()', () => {
+  // The live trigger is the one the newest migration installs: the practice-fields
+  // migration defined it on INSERT only, and the session screen now edits the day's
+  // record instead of logging a second one, so the records must answer UPDATE and
+  // DELETE too. The grep reads the file that owns the trigger today.
   const sql = readFileSync(
     fileURLToPath(
       new URL(
-        '../../../supabase/migrations/20261028120000_add_practice_fields.sql',
+        '../../../supabase/migrations/20261102213000_recalc_bpm_records_on_session_change.sql',
         import.meta.url,
       ),
     ),
     'utf8',
   );
 
-  test('the trigger multiplies the two session columns', () => {
-    // Written against `NEW.`, the row alias the AFTER INSERT trigger sees.
-    expect(/NEW\.bpm\b[^;]*\*[^;]*NEW\.clicks_per_beat\b/.test(sql)).toBe(true);
-  });
-
-  test('the seeding UPDATE uses the same product', () => {
-    // Same arithmetic, unqualified columns: legacy rows carry the default 1.
+  test('the trigger recomputes with the same product', () => {
+    // Unqualified columns: the aggregate runs over the exercise's rows, not one
+    // `NEW.` row, so the product is spelled the way the seeding spelled it.
     expect(/bpm\b[^;]*\*[^;]*clicks_per_beat\b/.test(sql)).toBe(true);
   });
 
   test('the result is written to both stored records', () => {
-    // `GREATEST` keeps the larger value, a bare assignment overwrites `last`.
-    expect(/SET max_bpm = GREATEST\(max_bpm, real_bpm_value\)/.test(sql)).toBe(true);
-    expect(/last_bpm = real_bpm_value/.test(sql)).toBe(true);
+    // `MAX` keeps the record among the rows that remain, the newest row is `last`.
+    expect(/SET max_bpm =/.test(sql)).toBe(true);
+    expect(/last_bpm =/.test(sql)).toBe(true);
+  });
+
+  test('the trigger covers every way the day row changes', () => {
+    // Editing the day's record and deleting it are the two writes the session
+    // screen makes against an existing row; an INSERT-only trigger would leave
+    // both with stale records.
+    expect(/AFTER INSERT OR UPDATE OR DELETE ON practice_sessions/.test(sql)).toBe(true);
   });
 });
