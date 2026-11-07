@@ -11,7 +11,9 @@ import { fileURLToPath } from 'node:url';
 // `src/lib/__tests__/songProgress.test.ts` (numeric) and `song-schema.test.ts` (against the
 // trigger's SQL).
 const view = readFileSync(fileURLToPath(new URL('../SongView.tsx', import.meta.url)), 'utf8');
-const app = readFileSync(fileURLToPath(new URL('../../App.tsx', import.meta.url)), 'utf8');
+const frame = readFileSync(fileURLToPath(new URL('../../layouts/AppLayout.tsx', import.meta.url)), 'utf8');
+const songsRoute = readFileSync(fileURLToPath(new URL('../../routes/SongListRoute.tsx', import.meta.url)), 'utf8');
+const songRoute = readFileSync(fileURLToPath(new URL('../../routes/SongRoute.tsx', import.meta.url)), 'utf8');
 
 // The write payload is the block between the two braces of `const fields = {`; the claim is
 // made over that slice, so prose about the percent elsewhere in the file cannot satisfy it.
@@ -153,25 +155,24 @@ describe('the screen re-reads when the day or the tab changes', () => {
 
 describe('the songs view is reachable from the header', () => {
   test('the nav offers songs as a peer of exercises', () => {
-    expect(app).toContain("<span className=\"hidden sm:inline\">{t('nav_songs')}</span>");
-    expect(app).toContain('listView === \'songs\'');
+    expect(frame).toContain("<span className=\"hidden sm:inline\">{t('nav_songs')}</span>");
+    expect(frame).toContain('to="/songs"');
   });
 
   test('a chosen song routes to the song screen', () => {
-    expect(app).toContain('<SongView');
-    expect(app).toContain('<SongList');
-    expect(app).toContain('onSelectSong={openSong}');
-    // The row on screen wins over the tab it came from, the same way an exercise does. The
-    // claim compares the two elements, because the nav mentions `listView === 'songs'` first.
-    expect(app.indexOf('<SongView')).toBeLessThan(app.indexOf('<SongList'));
-    expect(app.indexOf('<SongList')).toBeLessThan(app.indexOf('<SettingsView'));
+    expect(songsRoute).toContain('onSelectSong={(song) => navigate(`/songs/${song.id}`)}');
+    expect(songRoute).toContain('<SongView song={song}');
+    // The row on screen and the list it came from are two addresses rather than two
+    // branches of one comparison, so neither screen can draw the other by accident.
+    expect(songsRoute).not.toContain('<SongView');
+    expect(songRoute).not.toContain('<SongList');
   });
 
-  test('every nav choice drops both selections', () => {
-    for (const handler of ['goDashboard', 'goExercises', 'goSongs', 'goSettings']) {
-      const body = app.slice(app.indexOf(`const ${handler} = () =>`), app.indexOf('\n', app.indexOf(`const ${handler} = () =>`)));
-      expect(body).toContain('setSelectedExercise(null)');
-      expect(body).toContain('setSelectedSong(null)');
-    }
+  test('the row does not outlive the address it was opened from', () => {
+    // The rule every nav choice used to enforce by clearing two selection objects: an
+    // address names a catalog or a row, never both, so a catalog screen carries no row
+    // of its own to leave on screen under the next tab.
+    expect(songsRoute).not.toMatch(/useState|const \[selected/);
+    expect(frame).not.toMatch(/selectedSong|selectedExercise/);
   });
 });

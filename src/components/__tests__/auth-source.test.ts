@@ -4,31 +4,37 @@ import { fileURLToPath } from 'node:url';
 
 // Scope: the wiring of the gate, read off the source the way the other component
 // claims do - this suite has no DOM, so "the app is behind the gate" is a claim
-// about which branch App.tsx renders, not about a screen being painted.
+// about which branch the frame renders, not about a screen being painted.
 
-const app = readFileSync(fileURLToPath(new URL('../../App.tsx', import.meta.url)), 'utf8');
+const frame = readFileSync(fileURLToPath(new URL('../../layouts/AppLayout.tsx', import.meta.url)), 'utf8');
 const authView = readFileSync(fileURLToPath(new URL('../AuthView.tsx', import.meta.url)), 'utf8');
 
-describe('the gate sits in front of the three views', () => {
+describe('the gate sits in front of every route', () => {
   test('nothing renders until the session is resolved, and no session means the card', () => {
     // A fetch before the stored session lands would ask for rows the caller does
     // not own; `ready` is what holds the views back.
-    expect(app).toContain('{!ready ?');
-    expect(app).toContain(': !session ?');
-    expect(app).toContain('<AuthView theme=');
-    expect(app).toContain('const { session, ready, signOut } = useAuth();');
+    expect(frame).toContain('{!ready ?');
+    expect(frame).toContain(': !session ?');
+    expect(frame).toContain('<AuthView theme=');
+    expect(frame).toContain('const { session, ready, signOut } = useAuth();');
+    // The gate answers in place of the route's own content, so no address can be
+    // mounted under a session that has not arrived: the branch is around the slot,
+    // in the order the frame writes it - skeleton, card, then the slot.
+    expect(frame).toMatch(
+      /!ready \?\s*\(\s*<LoadingCards \/>\s*\)\s*: !session \?\s*\(\s*<AuthView[\s\S]*?\/>\s*\)\s*:\s*\(\s*<Suspense[\s\S]*?<Outlet/,
+    );
   });
 
   test('the header keeps only navigation; preferences and sign-out moved off it', () => {
     // Settings names the account and carries the controls next to it; the nav is
     // still inside the session because a signed-out visitor cannot reach it. The
     // auth card holds the two preference controls for a visitor with no session.
-    expect(app).toMatch(/\{session && \(\s*<nav/);
-    expect(app).toContain('onClick={goSettings}');
-    expect(app).toContain("t('nav_settings')");
-    expect(app).not.toContain('<ThemeToggle');
-    expect(app).not.toContain('<LanguageToggle');
-    expect(app).not.toContain('onClick={signOut}');
+    expect(frame).toMatch(/\{session && \(\s*<nav/);
+    expect(frame).toContain('to="/settings"');
+    expect(frame).toContain("t('nav_settings')");
+    expect(frame).not.toContain('<ThemeToggle');
+    expect(frame).not.toContain('<LanguageToggle');
+    expect(frame).not.toContain('onClick={signOut}');
     expect(authView).toContain('<ThemeToggle theme={theme}');
     expect(authView).toContain('<LanguageToggle lang={lang}');
   });

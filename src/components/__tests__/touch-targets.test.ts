@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 // unreachable, and a chip smaller than a finger is a miss the row underneath answers
 // instead. Both are read off the source like the other wiring claims, because no DOM
 // exists in this suite and neither is visible without a touch device.
-const app = readFileSync(fileURLToPath(new URL('../../App.tsx', import.meta.url)), 'utf8');
+const frame = readFileSync(fileURLToPath(new URL('../../layouts/AppLayout.tsx', import.meta.url)), 'utf8');
 const dashboard = readFileSync(fileURLToPath(new URL('../Dashboard.tsx', import.meta.url)), 'utf8');
 const list = readFileSync(fileURLToPath(new URL('../ExerciseList.tsx', import.meta.url)), 'utf8');
 const view = readFileSync(fileURLToPath(new URL('../SessionView.tsx', import.meta.url)), 'utf8');
@@ -61,19 +61,19 @@ describe('the chip stays small and the tap area is not', () => {
 
 describe('the header fits a narrow screen', () => {
   test('brand and height shrink below sm', () => {
-    // The brand, the two nav buttons and the two toggles share one row with no wrap:
-    // at 320px the full-size brand is what pushes the toggles off the edge.
-    expect(app).toContain('h-14 sm:h-16');
-    expect(app).toContain('text-base sm:text-lg');
-    expect(app).toContain('mr-1 sm:mr-2');
+    // The brand and the four tab links share one row with no wrap: at 320px the
+    // full-size brand is what pushes the last tab off the edge.
+    expect(frame).toContain('h-14 sm:h-16');
+    expect(frame).toContain('text-base sm:text-lg');
+    expect(frame).toContain('mr-1 sm:mr-2');
   });
 
   test('the nav row fits four views without wrapping', () => {
     // Songs joined the row as a peer of exercises. The label is hidden below sm, and the
-    // padding shrinks with it: brand, four buttons and the two toggles share one row that
-    // cannot wrap, so at 320px the full-size padding pushes the toggles off the edge.
-    expect(app).toMatch(/px-2 sm:px-3 py-2\.5/);
-    expect(app.match(/hidden sm:inline/g)).toHaveLength(4);
+    // padding shrinks with it: brand and four tab links share one row that cannot wrap, so
+    // at 320px the full-size padding pushes the last one off the edge.
+    expect(frame).toMatch(/px-2 sm:px-3 py-2\.5/);
+    expect(frame.match(/hidden sm:inline/g)).toHaveLength(4);
   });
 
   test('the language toggle stacks its icon and its code', () => {

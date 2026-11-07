@@ -215,5 +215,7 @@ export const EN = {
     settings_signed_in_as: 'Signed in as',
     theme_option_light: 'Light',
     theme_option_dark: 'Dark',
+    missing_exercise: 'This exercise does not exist, or it belongs to another account.',
+    missing_song: 'This song does not exist, or it belongs to another account.',
   },
 };

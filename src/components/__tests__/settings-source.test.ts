@@ -8,29 +8,37 @@ import type { Locale } from '@/lib/i18n';
 
 // Scope: the account screen, read off the source the way the other component
 // claims do - this suite has no DOM, so "Settings is a view" is a claim about
-// which branch App.tsx renders and what the card names, not about a screen
-// being painted.
+// which screen the header's link reaches and what the card names, not about a
+// screen being painted.
 
-const app = readFileSync(fileURLToPath(new URL('../../App.tsx', import.meta.url)), 'utf8');
+const frame = readFileSync(fileURLToPath(new URL('../../layouts/AppLayout.tsx', import.meta.url)), 'utf8');
+const settingsRoute = readFileSync(fileURLToPath(new URL('../../routes/SettingsRoute.tsx', import.meta.url)), 'utf8');
 const settings = readFileSync(fileURLToPath(new URL('../SettingsView.tsx', import.meta.url)), 'utf8');
 const authView = readFileSync(fileURLToPath(new URL('../AuthView.tsx', import.meta.url)), 'utf8');
 const DICTIONARIES: Record<string, Locale> = { en: EN, pt: PT, es: ES };
 
 describe('Settings is a view, and the header is not a control bar', () => {
-  test('the nav reaches it and the gate renders it', () => {
-    expect(app).toContain("listView === 'settings'");
-    expect(app).toContain('<SettingsView');
-    expect(app).toContain('onClick={goSettings}');
-    expect(app).toContain("t('nav_settings')");
+  test('the nav reaches it, and the settings screen is what answers there', () => {
+    // The header's link and the screen it opens: an address the table declares but
+    // no link points at is unreachable, and a link that points at nothing lands the
+    // reader on the landing screen.
+    expect(frame).toContain('to="/settings"');
+    expect(frame).toContain("t('nav_settings')");
+    expect(settingsRoute).toContain('<SettingsView');
+    // The email and the sign-out the card shows arrive from the frame, which is the
+    // only holder of the session - see `routes-source.test.ts` for that rule.
+    expect(settingsRoute).toContain('const { theme, setTheme, lang, setLanguage, email, signOut } = useApp();');
+    expect(settingsRoute).toContain('email={email}');
+    expect(settingsRoute).toContain('signOut={signOut}');
   });
 
   test('the moved controls left the header, and the auth card took the pair', () => {
     // Sign-out names the account, so it lives beside the email; theme and
     // language live in the form. A signed-out visitor gets the compact pair on
     // the card instead, because Settings sits behind the gate.
-    expect(app).not.toContain('<ThemeToggle');
-    expect(app).not.toContain('<LanguageToggle');
-    expect(app).not.toContain('onClick={signOut}');
+    expect(frame).not.toContain('<ThemeToggle');
+    expect(frame).not.toContain('<LanguageToggle');
+    expect(frame).not.toContain('onClick={signOut}');
     expect(authView).toContain('<ThemeToggle theme={theme}');
     expect(authView).toContain('<LanguageToggle lang={lang}');
     expect(settings).toContain('onClick={signOut}');
@@ -68,7 +76,7 @@ describe('the form names values, not cycles', () => {
   });
 
   test('every dictionary key the two screens name exists in all three languages', () => {
-    const keys = [...(settings + app).matchAll(/t\('([a-z_]+)'\)/g)].map((m) => m[1]);
+    const keys = [...(settings + frame).matchAll(/t\('([a-z_]+)'\)/g)].map((m) => m[1]);
     expect(keys.length).toBeGreaterThan(0);
     for (const key of [
       'nav_settings',

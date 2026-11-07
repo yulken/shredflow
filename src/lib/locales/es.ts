@@ -223,5 +223,7 @@ export const ES = {
     settings_signed_in_as: 'Conectado como',
     theme_option_light: 'Claro',
     theme_option_dark: 'Oscuro',
+    missing_exercise: 'Este ejercicio no existe, o pertenece a otra cuenta.',
+    missing_song: 'Esta canción no existe, o pertenece a otra cuenta.',
   },
 };

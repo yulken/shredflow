@@ -681,3 +681,71 @@ API and songsterr.com sends no CORS header, so the browser cannot read a tab). `
 pins the absence instead of the presence (`not.toContain('npm run')`): the screen never sends a user to a
 terminal. The importer itself is unchanged — it exists exactly because of the CORS constraint. 365 passed
 over 22 files; typecheck, lint, build clean.
+
+### 2026-11-06 Routing: one address per screen ✅
+
+Caio: dashboard, exercises, songs and settings should be separated by URL rather than by the state
+machine. `App.tsx` held that machine — a `listView` string plus `selectedExercise`/`selectedSong` objects —
+so all six screens sat at `/`, a reload always landed back on the landing screen, and no screen could be
+shared.
+  - `react-router-dom@^7.18.5` (the current release, peer `react >=18`), so the app's React 18.3.1 is
+  untouched — the alternative was a React 19 upgrade nobody asked for. `src/App.tsx` is gone (`git rm`);
+  `src/main.tsx` renders `<RouterProvider router={router} />`.
+  - `src/router.tsx`: `createBrowserRouter`, one entry per address under one frame — index `/`, `exercises`,
+  `exercises/:exerciseId`, `songs`, `songs/:songId`, `settings` — plus `'*'` → `<Navigate to="/" replace />`.
+  Each route is `Component: lazy(() => import(...))`, so the address decides which chunk is fetched. The frame
+  is a static import: it is what answers before any chunk arrives, and the gate inside it has to hold a
+  route's fetch back until the session is read.
+  - `src/layouts/AppLayout.tsx`: the header, footer and gate `App.tsx` used to draw, now wrapping
+  `<Suspense>` + `<Outlet>` instead of branching on `listView`. The gate is unchanged in kind (`!ready` →
+  skeleton, `!session` → `<AuthView>`, else the slot), which is what lets `/songs/<id>` opened signed out keep
+  its URL and land on the song once the card is answered. Scroll resets on `pathname`: an address changes the
+  window's content without moving the scroll, so opening the twentieth row of a long catalog arrived in the
+  middle of the row's own screen.
+  - `src/layouts/appContext.ts`: `AppContext` and `useApp()` in a module of their own, for two load-bearing
+  reasons. The layout then exports one component, which is what keeps `react-refresh/only-export-components`
+  at zero warnings — the same reason the routes mount as `Component:` rather than as lazy consts declared
+  next to the table. And the browser-backed state keeps exactly one holder: `useTheme`/`useLanguage` each own
+  a `useState` and write `localStorage`, and `useAuth` subscribes to Supabase and runs `claimLegacyRows()`
+  once per instance, so a second call site would be a second copy of theme, language and session, plus a
+  second claim.
+  - `src/routes/*.tsx` (six thin wrappers): the screens (`Dashboard`, `ExerciseList`, `SessionView`,
+  `SongList`, `SongView`, `SettingsView`) still take rows and callbacks as props, so none of them knows an
+  address exists. A list wrapper builds the row's address from the row's own id column — `navigate` to
+  `/exercises/` plus the id — and a detail wrapper reads `useParams()` and hands the row down.
+  - `src/hooks/useExercise.ts` / `useSong.ts`: one `.eq('id', id).maybeSingle()` keyed by the URL's id — what
+  replaced the object the list was holding, since a reload or a pasted link arrives with no list. The three
+  ways to miss are one `null`: no id, an id that is not a UUID (Postgres refuses the comparison with `22P02`),
+  and a row of another account, hidden by the SELECT policy of `20261102150000_add_user_ownership.sql`.
+  `src/components/MissingRow.tsx` answers all three with a link to the catalog rather than a browser back, and
+  `src/components/LoadingCards.tsx` is one skeleton for the three waits (auth resolving, chunk arriving, row
+  being read).
+  - Nav: `NavLink` replaced the four handlers that cleared both selections, and `end` is the difference
+  between the two pairs of tabs — `/` and `/settings` ask for an exact match, `/exercises` and `/songs`
+  deliberately do not, so `/songs/<id>` keeps the Songs tab lit. That is the "row on screen wins over the tab
+  it came from" rule `App.tsx` rebuilt by hand in four places, now one flag; `NavLink` also writes
+  `aria-current="page"`, which the buttons never did.
+  - 2 keys × en/pt/es (`missing_exercise`, `missing_song`), no new placeholders.
+  - Tests: `src/__tests__/routes-source.test.ts` (new, 15) pins the table, the parameter a path declares
+  matching the one its screen reads (`useParams` matches by name, so a typo there is a permanent missing card
+  with no error anywhere), the row address built across two files, the tab-highlight rule evaluated with
+  `matchPath` over the paths the table declares rather than over a copy of them, the frame being static while
+  the six screens are not, the single holder, and the back target. Negative claims run over `codeOnly()`: a
+  comment explaining why `history.back()` is the wrong target would otherwise answer its own claim. The four
+  suites that read `App.tsx` moved to the new files — `auth-source`, `settings-source`, `touch-targets`, and
+  `song-view-source`, whose "every nav choice drops both selections" test became "a catalog route carries no
+  row of its own": the invariant is structural now, not something to remember. `vitest` 380 passed (23 files),
+  up from 365 (22); `tsc --noEmit` clean; `eslint .` clean at 0 warnings, the baseline it had before.
+  - Build: the warning is gone. Before, one chunk of 590.21 kB (gzip 172.95), over Vite's 500 kB limit; now an
+  entry of 403.17 kB (gzip 124.29) — react-dom, supabase-js, the router and the frame — the Chart.js-backed
+  `ProgressChart` as a shared 205.94 kB chunk, and per-address chunks of 3.31–20.41 kB. The dashboard's first
+  load is about what it was; what changed is that the chart library and the two long row screens are fetched
+  by the addresses that draw them, and the entry no longer carries all six screens.
+  - Verified over `vite preview`: `/`, `/exercises/<uuid>` and `/nada` each answer 200 with the shell and the
+  entry script, and the route chunks are served — the `BrowserRouter` requirement, recorded because nothing in
+  this repository configures a host (CI has no deploy step). The same four commands were run the way CI runs
+  them, over a copy of the tree without `.env`: lint, typecheck, 380 tests and the build all green, entry chunk
+  403.00 kB.
+  - Still Caio's: the browser pass — `/` → `/exercises/<uuid>` → F5 → back; `/songs/<uuid>` opened signed out,
+  keeping the URL and landing on the song after sign-in; `/nada` landing on `/`; and a UUID naming no row
+  showing the missing card.

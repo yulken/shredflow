@@ -87,8 +87,11 @@ otherwise move under your account.
 ## Project structure
 
 ```
+src/              router.tsx — one address per screen, all of them under the frame
 src/components/   Dashboard, ExerciseList, SessionView, ProgressChart, SettingsView, AuthView, toggles
-src/hooks/        theme, language, chart period (the three persisted), day rollover, refresh on visible, auth session
+src/hooks/        theme, language, chart period (the three persisted), day rollover, refresh on visible, auth session, one exercise / one song read by URL id
+src/layouts/      AppLayout — header, footer, the auth gate — and the outlet context routes read
+src/routes/       one thin wrapper per address, each fetched lazily
 src/lib/          supabase client, auth, i18n + locales, bpm, tension, chart, period, clock
 supabase/         config.toml + migrations
 ```
@@ -105,6 +108,11 @@ supabase/         config.toml + migrations
   `npm run import:songsterr <url>` (or a bare songId), signed in with `SUPABASE_EMAIL` /
   `SUPABASE_PASSWORD` from `.env`. It reads the tab's tempo per measure and never sends
   `percent` or `user_id`; the DB triggers write both.
+- **Addresses.** Every screen has its own URL — `/`, `/exercises`, `/exercises/<id>`, `/songs`,
+  `/songs/<id>`, `/settings` — and a detail screen reads its row by the id in the address, so a
+  reload or a pasted link opens the row it names. Serving a deep link needs a host that answers
+  unknown paths with `index.html`: `npm run dev` and `npm run preview` already do, and nothing
+  deploys from CI, so no such rule is written in this repository.
 - The spec, and the deliberate deviations from it, are in [requirements.md](requirements.md).
 - The dated record of what changed each day, with the verification evidence behind it, is in
   [docs/history.md](docs/history.md).
