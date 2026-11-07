@@ -16,7 +16,7 @@ import { tensionLabel } from '@/lib/tension';
 import { realBpm } from '@/lib/bpm';
 import { formatPercent, type PercentPoint } from '@/lib/songProgress';
 import { spansMultipleYears, tickDateLabel, tooltipDateLabel } from '@/lib/chart';
-import { filterSessions, tickUnit, withinPeriod, type Period } from '@/lib/period';
+import { axisDays, axisDomain, filterSessions, tickUnit, withinPeriod, type Period } from '@/lib/period';
 import type { Exercise, PracticeSession } from '@/lib/supabase';
 
 // Time scale needs the date-fns adapter registered above; LinearScale covers
@@ -95,9 +95,11 @@ export function ProgressChart({
   // One series per exercise with dashboard_visible = true; Y is Real BPM
   // (bpm x clicks_per_beat), matching the DB trigger's arithmetic. The period is a
   // chart-only filter: the catalog's Max/Last stay the stored trigger records.
-  const { chartData, seriesSessions, percentSeries, hasData, hasAnySession, hasAnyPoint, withYear, unit, percent } = useMemo(() => {
+  const { chartData, seriesSessions, percentSeries, hasData, hasAnySession, hasAnyPoint, domain, withYear, unit, percent } = useMemo(() => {
     // The window is anchored here, once per recomputation: the control changes
-    // `period`, a refetch changes `sessions`, and both rebuild the points.
+    // `period`, a refetch changes `sessions`, and both rebuild the points. The same
+    // instant ends the X axis, so the day boundary the screens schedule
+    // (`useDayRollover`) walks that edge forward without a reload.
     const now = new Date();
 
     if (percentPoints) {
@@ -108,6 +110,9 @@ export function ProgressChart({
       // the `created_at` row `tickUnit` and `spansMultipleYears` take, so both charts ask
       // the same two questions in the same way.
       const days = inPeriod.map((p) => ({ created_at: p.date.toISOString() }));
+      // The anchor day rides along: the axis reaches it, so the wording has to account
+      // for it (`axisDays`, `src/lib/period.ts`).
+      const axis = axisDays(days, now);
       return {
         chartData: {
           datasets: [{
@@ -129,8 +134,11 @@ export function ProgressChart({
         // logged only outside the window is the window's doing, not an empty song.
         hasAnySession: false,
         hasAnyPoint: percentPoints.length > 0,
-        withYear: spansMultipleYears(days),
-        unit: tickUnit(days),
+        // The axis runs to the end of today even when the last block logged is older, so
+        // the percent curve does not leave its own last day looking like the current one.
+        domain: axisDomain(days, now),
+        withYear: spansMultipleYears(axis),
+        unit: tickUnit(axis),
         percent: true,
       };
     }
@@ -163,8 +171,9 @@ export function ProgressChart({
 
     // Only the points actually drawn decide the axis wording: a series hidden by
     // `dashboard_visible`, or a day outside the period, must not change what the
-    // axis says.
+    // axis says. The anchor day is the one thing the axis knows that no point does.
     const drawn = series.flat();
+    const axis = axisDays(drawn, now);
 
     return {
       chartData: { datasets },
@@ -175,8 +184,11 @@ export function ProgressChart({
       // both are empty charts, but only the second one is the period's doing.
       hasAnySession: sessions.some((s) => visible.some((e) => e.id === s.exercise_id)),
       hasAnyPoint: false,
-      withYear: spansMultipleYears(drawn),
-      unit: tickUnit(drawn),
+      // The right edge is today, so an idle stretch plots the gap instead of ending
+      // its last session at the edge and reading as the current day.
+      domain: axisDomain(drawn, now),
+      withYear: spansMultipleYears(axis),
+      unit: tickUnit(axis),
       percent: false,
     };
   }, [exercises, sessions, percentPoints, percentLabel, period]);
@@ -189,6 +201,14 @@ export function ProgressChart({
       scales: {
         x: {
           type: 'time',
+          // The domain is asked for, not left to the series: a time scale sized by its
+          // data puts the plot's right edge on the last day logged, so an idle stretch
+          // makes that day look like today. `axisDomain` runs the axis to the end of
+          // today and keeps the left edge on the oldest point plotted
+          // (`src/lib/period.ts`). The scale options take the epoch number rather than
+          // the Date the rule answers, which is what its own typing asks for.
+          min: domain.min.getTime(),
+          max: domain.max.getTime(),
           // Chart.js draws one grid line per tick, so the unit is what makes the
           // axis mark readable subdivisions: `tickUnit` grows it with the window
           // the control selected, which keeps weekly Sunday lines over a month or
@@ -279,7 +299,7 @@ export function ProgressChart({
         },
       },
     };
-  }, [seriesSessions, percentSeries, percent, withYear, unit, compact, narrow]);
+  }, [seriesSessions, percentSeries, domain, percent, withYear, unit, compact, narrow]);
 
   if (!hasData) {
     return (

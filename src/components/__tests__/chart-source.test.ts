@@ -122,7 +122,9 @@ describe('the X axis marks readable subdivisions for the window drawn', () => {
   test('the tick unit comes from the points, not from a constant', () => {
     // Chart.js draws one grid line per tick, so the unit is what stops the axis
     // densifying into days/hours. A hardcoded 'week' would put 52 lines on a year.
-    expect(chart).toMatch(/unit: tickUnit\(drawn\)/);
+    // `axis` is the points drawn plus the anchor day: the axis runs to it, so a unit
+    // read only off the points would describe a stretch the axis actually draws.
+    expect(chart).toMatch(/unit: tickUnit\(axis\)/);
     expect(chart).toMatch(/time: \{ unit, stepSize: compact \? 2 : 1, tooltipFormat: 'PP' \}/);
     // Deliberately no `isoWeekday`: the adapter's own `week` start
     // (`weekStartsOn: 0`) is the alignment that was chosen. Both negatives are
@@ -138,8 +140,9 @@ describe('the X axis marks readable subdivisions for the window drawn', () => {
     // narrowing the period decides the unit and the year together.
     expect(chart).toMatch(/const inPeriod = filterSessions\(sessions, period, now\)/);
     expect(chart).toMatch(/const drawn = series\.flat\(\)/);
-    expect(chart).toContain('withYear: spansMultipleYears(drawn)');
-    expect(chart).toContain('unit: tickUnit(drawn)');
+    expect(chart).toMatch(/const axis = axisDays\(drawn, now\)/);
+    expect(chart).toContain('withYear: spansMultipleYears(axis)');
+    expect(chart).toContain('unit: tickUnit(axis)');
   });
 
   test('no label carries a clock time', () => {
@@ -153,6 +156,38 @@ describe('the X axis marks readable subdivisions for the window drawn', () => {
 
   test('the tooltip title uses the same helper as the ticks', () => {
     expect(chart).toContain('tooltipDateLabel(x, dateLocale(), withYear)');
+  });
+});
+
+// The two ends of the X axis are asked for rather than left to the series: a time scale
+// sized by its own data draws the plot's right edge on the last day logged, so an idle
+// stretch makes that day read as the current one. The arithmetic is `axisMax` and
+// `axisDomain` in `src/lib/period.ts`, checked directly in `src/lib/__tests__/period.test.ts`;
+// what no runtime check sees is that both branches of the one `useMemo` hand their own
+// domain to the same scale, and that the edge rides the day the window was anchored on.
+describe('the axis ends today, not at the last point drawn', () => {
+  test('the scale is given a domain instead of fitting itself to the series', () => {
+    expect(chart).toMatch(/min: domain\.min\.getTime\(\),/);
+    expect(chart).toMatch(/max: domain\.max\.getTime\(\),/);
+    // Each branch sizes the axis from the points it keeps, so hiding a series or
+    // narrowing the window moves the left edge without the axis ever shrinking past
+    // what is drawn.
+    expect(chart).toMatch(/domain: axisDomain\(drawn, now\)/);
+    expect(chart).toMatch(/domain: axisDomain\(days, now\)/);
+    // The left edge stays on the oldest point plotted: the period control filters the
+    // points, it does not draw a frame the size of the window.
+    expect(chart).not.toMatch(/min: periodCutoff/);
+  });
+
+  test('the right edge rides the day the window is anchored on', () => {
+    // One clock per recomputation, held by the data memo: the midnight refresh
+    // (`useDayRollover`) refetches, the points rebuild and the edge walks forward with
+    // them. A clock read inside `options` would be the failure this pins - the options
+    // memo does not own the points, so the edge would sit where the tab was opened.
+    expect(chart).toMatch(/const now = new Date\(\)/);
+    expect(chart).toMatch(/\}, \[exercises, sessions, percentPoints, percentLabel, period\]/);
+    expect(chart).toMatch(/\}, \[seriesSessions, percentSeries, domain, percent, withYear, unit, compact, narrow\]/);
+    expect(chart).not.toMatch(/Date\.now\(\)/);
   });
 });
 
@@ -212,9 +247,17 @@ describe('the year is conditional on what is plotted', () => {
   test('it is decided by the drawn points, not by every session', () => {
     // A series hidden by `dashboard_visible` must not change what the axis says.
     expect(chart).toMatch(/const drawn = series\.flat\(\)/);
-    expect(chart).toContain('withYear: spansMultipleYears(drawn)');
+    expect(chart).toContain('withYear: spansMultipleYears(axis)');
     // Both labels read the same flag, so the axis and the tooltip never disagree.
     expect(chart).toMatch(/callback: \(\w+\) => tickDateLabel\(.*withYear\)/);
+  });
+
+  test('the anchor day counts, because the axis reaches it', () => {
+    // A log that stops in December plots no point in January, yet the axis runs to
+    // today and crosses the year boundary: without the anchor day the ticks there
+    // would print `01/01` with no year.
+    expect(chart).toMatch(/const axis = axisDays\(drawn, now\)/);
+    expect(chart).toMatch(/import \{ axisDays, axisDomain, filterSessions, tickUnit, withinPeriod/);
   });
 });
 
@@ -227,8 +270,9 @@ describe('the percent axis answers a different question', () => {
     // The axis shape follows the points drawn, exactly as the BPM branch: a day outside
     // the window cannot decide the tick unit or whether the year is printed.
     expect(chart).toMatch(/const days = inPeriod\.map\(\(p\) => \(\{ created_at: p\.date\.toISOString\(\) \}\)/);
-    expect(chart).toContain('withYear: spansMultipleYears(days)');
-    expect(chart).toContain('unit: tickUnit(days)');
+    expect(chart).toMatch(/const axis = axisDays\(days, now\)/);
+    expect(chart).toContain('withYear: spansMultipleYears(axis)');
+    expect(chart).toContain('unit: tickUnit(axis)');
   });
 
   test('the scale stops at 100, because a percent is a share', () => {

@@ -1,11 +1,16 @@
 import { describe, expect, test } from 'vitest';
-import { DEFAULT_PERIOD, PERIODS, PERIOD_LABEL_KEYS, filterSessions, isPeriod, periodCutoff, tickUnit, withinPeriod } from '@/lib/period';
+import { axisDays, axisDomain, axisMax, DEFAULT_PERIOD, PERIODS, PERIOD_LABEL_KEYS, filterSessions, isPeriod, periodCutoff, tickUnit, withinPeriod } from '@/lib/period';
+import { spansMultipleYears } from '@/lib/chart';
+import { DAY_MS, isSameLocalDay, msUntilMidnight } from '@/lib/clock';
 import { getLang, setLang, t } from '@/lib/i18n';
 import type { PracticeSession } from '@/lib/supabase';
 
 // Pure arithmetic: the window is a duration measured against a clock passed in,
 // so nothing here reads `Date.now()` and no test can drift with the machine's
-// timezone. Storage lives in `src/hooks/useChartPeriod.ts`, outside this suite,
+// timezone. The axis domain is measured off the same clock; where its answer is a
+// local day boundary, the assertions read the local calendar fields and the distance
+// to `msUntilMidnight` rather than a spelled-out UTC instant, for the same reason.
+// Storage lives in `src/hooks/useChartPeriod.ts`, outside this suite,
 // the same way the language's `localStorage` chain stays out of `i18n.test.ts`.
 
 const NOW = new Date('2026-10-31T12:00:00Z');
@@ -131,5 +136,103 @@ describe('the tick unit follows the points drawn', () => {
 
   test('input order does not change the unit', () => {
     expect(tickUnit([LOG[5], LOG[0], LOG[3]])).toBe(tickUnit([LOG[0], LOG[3], LOG[5]]));
+  });
+});
+
+// The chart asks the scale for its two ends instead of letting Chart.js fit the axis to
+// the series, because a fitted axis draws the plot's right edge on the last day logged:
+// an idle stretch then reads as "practiced today". The domain is measured off the same
+// clock the windows are, so the edges below are the day the window was anchored on.
+describe('the axis runs from the oldest point plotted to today', () => {
+  test('the day turns over on the boundary the refresh schedules itself for', () => {
+    const end = axisMax(NOW);
+    // The day's own end: local midnight, whatever the machine's zone reads there.
+    expect([end.getHours(), end.getMinutes(), end.getSeconds(), end.getMilliseconds()]).toStrictEqual([0, 0, 0, 0]);
+    // Exactly the deadline the day refresh schedules itself for, so the axis and the
+    // rows it plots turn over at the same instant.
+    expect(end.getTime() - NOW.getTime()).toBe(msUntilMidnight(NOW));
+    // Never further: an edge reaching into a second unarrived day would draw a day the
+    // log cannot have.
+    expect(end.getTime() - NOW.getTime()).toBeGreaterThan(0);
+    expect(end.getTime() - NOW.getTime()).toBeLessThanOrEqual(DAY_MS);
+  });
+
+  test('the edge stops inside today, one millisecond short of that boundary', () => {
+    // This is the whole reason the scale is not handed `axisMax` itself: the time scale
+    // adds a tick at the axis maximum when that maximum falls on one of its unit
+    // boundaries, and every unit boundary is a local midnight. A Friday ending at
+    // Sunday's midnight put `08/11` on the axis - a day with nothing plotted on it - and
+    // the first of a month does the same to the monthly unit. An edge at the last
+    // instant of the day cannot be a boundary, so the axis never labels an unarrived day.
+    const { max } = axisDomain(LOG, NOW);
+    expect([max.getHours(), max.getMinutes(), max.getSeconds(), max.getMilliseconds()]).toStrictEqual([23, 59, 59, 999]);
+    expect(axisMax(NOW).getTime() - max.getTime()).toBe(1);
+    expect(isSameLocalDay(max, NOW)).toBe(true);
+  });
+
+  test('a session logged late today sits inside the plot', () => {
+    // Why the edge is the day's end and not `now`: a row written at 23:00 has to fall
+    // left of the right edge, while the axis still has to be called "today".
+    const late = new Date(NOW);
+    late.setHours(23, 0, 0, 0);
+    const { min, max } = axisDomain([session(late.toISOString())], NOW);
+    expect(min.getTime()).toBe(late.getTime());
+    expect(max.getTime()).toBeGreaterThanOrEqual(late.getTime());
+    expect(isSameLocalDay(max, NOW)).toBe(true);
+  });
+
+  test('a stamp past today moves the edge instead of escaping it', () => {
+    // The schema's `now()` is the database's clock, not the browser's: near midnight a
+    // fresh row can land after the local day's end. The domain has to grow for it, or the
+    // scale would clip the one point the user just logged - and a label at that edge
+    // then names a day that has a point on it.
+    const ahead = new Date(axisMax(NOW).getTime() + 60_000);
+    const { min, max } = axisDomain([session(ahead.toISOString())], NOW);
+    expect(max.getTime()).toBe(ahead.getTime());
+    expect(min.getTime()).toBe(ahead.getTime());
+  });
+
+  test('the left edge stays on the oldest point, whatever the input order', () => {
+    // The period control filters points; it does not draw a frame the size of the
+    // window, so a window wider than the log spends no axis on empty days.
+    const { min, max } = axisDomain(LOG, NOW);
+    expect(min.toISOString()).toBe('2023-12-31T12:00:00.000Z');
+    expect(max.getTime()).toBe(axisMax(NOW).getTime() - 1);
+    expect(axisDomain([...LOG].reverse(), NOW).min.toISOString()).toBe(min.toISOString());
+  });
+
+  test('a window that keeps nothing still answers a usable domain', () => {
+    // The empty state replaces the canvas, but the arithmetic runs before the render
+    // decides that: a flipped axis is what a degenerate case would hand a scale.
+    const { min, max } = axisDomain([], NOW);
+    expect(max.getTime()).toBe(min.getTime());
+    expect(isSameLocalDay(max, NOW)).toBe(true);
+  });
+
+  test('the anchor day the axis rules read is today, not the axis end', () => {
+    // `tickUnit`'s 90-day line was drawn for the quarter's own length. Anchoring the day
+    // list at the day's end would measure 90.x days and put month lines over a quarter,
+    // which is not the subdivision that line was chosen for.
+    const quarterEnds = [session('2026-08-02T12:00:00Z'), session('2026-10-31T12:00:00Z')]; // exactly 90 days from NOW
+    expect(tickUnit(axisDays(quarterEnds, NOW))).toBe('week');
+    expect(tickUnit([...quarterEnds, { created_at: axisMax(NOW).toISOString() }])).toBe('month');
+  });
+
+  test('the anchor day carries a year no point reaches', () => {
+    // A log that stops in December plots nothing in January, yet a January axis crosses
+    // the boundary and its ticks have to say so.
+    const december = [session('2025-12-20T12:00:00Z'), session('2025-12-28T12:00:00Z')];
+    const january = new Date('2026-01-05T12:00:00Z');
+    expect(spansMultipleYears(december)).toBe(false);
+    expect(spansMultipleYears(axisDays(december, january))).toBe(true);
+  });
+
+  test('the anchor day does not invent points for the series', () => {
+    // `axisDays` feeds the axis wording only; the datasets are built from the filtered
+    // sessions, and a day with no practice must never become a dot on a line.
+    const days = axisDays([LOG[3]], NOW);
+    expect(days).toHaveLength(2);
+    expect(days[0]).toBe(LOG[3]);
+    expect(days[1].created_at).toBe(NOW.toISOString());
   });
 });

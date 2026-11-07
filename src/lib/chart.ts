@@ -5,7 +5,9 @@
 
 /** True when the rows actually drawn cover more than one year. The year is read
  * in the browser's zone, the same one `toLocaleDateString` prints below. Anything
- * with a `created_at` counts: practice sessions and song logs both plot a day. */
+ * with a `created_at` counts: practice sessions and song logs both plot a day. The
+ * chart feeds it the days the axis covers, so a year boundary the plotted area
+ * crosses but no point reaches still counts (`axisDays`, `period.ts`). */
 export function spansMultipleYears(logs: { created_at: string }[]): boolean {
   return new Set(logs.map((s) => new Date(s.created_at).getFullYear())).size > 1;
 }

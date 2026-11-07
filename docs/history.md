@@ -749,3 +749,66 @@ shared.
   - Still Caio's: the browser pass — `/` → `/exercises/<uuid>` → F5 → back; `/songs/<uuid>` opened signed out,
   keeping the URL and landing on the song after sign-in; `/nada` landing on `/`; and a UUID naming no row
   showing the missing card.
+
+### 2026-11-07 The chart ends today, not at the last session ✅
+
+Caio: the dashboard chart appears to stop on 2026-11-04, the day of the last session logged, and that date is
+read as the current one — the graph should close at the current day even when nothing was practiced today.
+  - Diagnosis: nothing asked the X scale for its two ends, so `TimeScale.determineDataLimits` fitted the axis to
+  the datasets and the plot's right edge landed on the newest point. An idle stretch and "practiced today"
+  drew the same picture.
+  - Three rules joined `tickUnit` in `src/lib/period.ts`, each taking the clock as an argument the way the
+  window arithmetic beside them does: `axisMax(now)` — the end of the local day (`setHours(24, 0, 0, 0)`, the
+  same boundary `msUntilMidnight` turns the log on, so a row written at 23:00 falls inside the plot rather than
+  past the edge); `axisDomain(drawn, now)` — oldest day actually plotted to the end of today, whichever of the
+  two ends is later so nothing drawn falls outside the scale (the schema's `now()` is the database's clock, and
+  near midnight that stamps a fresh row after the local day), and a degenerate but valid answer when nothing is
+  plotted, since the empty state replaces the canvas; and `axisDays(drawn, now)` — the days the axis wording is
+  read from.
+  - The left edge stays on the oldest point in both branches: the period control filters the points, it does not
+  draw a frame the size of the window, and a window wider than the log would spend its width on axis that no day
+  occupies.
+  - `axisDays` is why the tick unit and the conditional year stopped reading `drawn`/`days`: the axis covers a day
+  no point reaches, so a log that stops in December would print `01/01` with no year once the plot runs into
+  January. The anchor is `now`, not `axisMax(now)` — 90 days measured to the end of a day read as 90.x, and
+  `tickUnit`'s 90-day line would answer `month` over a quarter, which is not the subdivision it was drawn for.
+  - Post-mortem, same day: the browser pass found `08/11` at the right edge on Friday 2026-11-07 — a label for a
+  day with nothing plotted on it, which is the mistake the change was meant to remove wearing a new hat. The
+  claim two bullets above about `_generate` was wrong: it adds the boundary tick "when it falls exactly on the
+  maximum", and the axis had been handed Sunday's midnight as its maximum, so that is precisely what it did.
+  Every boundary of a time scale's unit is a local midnight, so the first of a month would have done the same to
+  the monthly unit a day before each month end. The fix sits in the rule rather than in the scale: `axisDomain`
+  ends the axis one millisecond short of `axisMax(now)` — an edge that cannot be a unit boundary — and stays on
+  the day of the clock it was handed, pinned through `isSameLocalDay` (`src/lib/clock.ts`) and the edge's own
+  local clock fields. `axisMax` stayed as the name of the boundary the log turns on, which is what the day
+  refresh schedules; only the value the scale is given moved.
+  - The other half of that original bullet still stands, and it is why the fix is the edge rather than a hook:
+  forcing the maximum to be a tick is a second mechanism (`afterBuildTicks`), and `autoSkip` runs after it, so the
+  narrow plot capped at 5 labels could drop the very label being asked for. The gap carries the reading; the
+  mechanism stayed out.
+  - The edge rides the clock the points are anchored on. The three chart screens already schedule
+  `useDayRollover`, so the midnight refetch rebuilds the points and the axis walks forward with them — no hook,
+  no timer. A clock read inside the `options` memo would have been the failure: that memo does not own the points.
+  - `min`/`max` reach the scale as epoch numbers: Chart.js types a time scale's `min`/`max` as `string | number`
+  even though the date-fns adapter parses a `Date`, so the rules answer `Date` and the call site converts.
+  - Tests: `src/lib/__tests__/period.test.ts` 13 → 22. The day boundary is asserted through local calendar
+  fields and its distance to `msUntilMidnight` rather than a spelled-out UTC instant, so nothing drifts with the
+  machine's zone; the scale's edge is pinned at `23:59:59.999`, one millisecond short of that boundary and on the
+  same local day as the clock it was handed, which is what keeps an unarrived day off the axis; a 23:00 row sits
+  inside the domain, and so does a stamp a minute past the day's end (the edge moves for it); the left edge ignores
+  input order; an empty window still answers a usable domain; the anchor is `now`, pinned by the pair
+  `tickUnit(axisDays(quarter, NOW)) === 'week'` against the day-end variant `=== 'month'`; the anchor day carries a
+  year no point reaches; and it invents no point for the series. `src/components/__tests__/chart-source.test.ts`
+  43 → 46: both branches of the one `useMemo` hand their own domain to the scale, nothing re-anchors the left edge
+  at `periodCutoff`, the domain sits in the `options` memo's dependencies, and no `Date.now()` appears in the
+  component. The three pins that read the axis wording off `drawn`/`days` read it off `axis` now.
+  - `vitest` 392 passed (23 files), up from 380 (23); `tsc --noEmit` clean; `eslint .` clean at 0 warnings;
+  `vite build` green — the `ProgressChart` chunk 206.06 kB (gzip 67.48), up from 205.94 kB, entry 403.17 kB
+  (gzip 124.28).
+  - Recorded in `requirements.md` §6 beside the period-window note it grows out of, as a deviation from the
+  spreadsheet's visual output: the axis no longer hugs the series.
+  - Still Caio's: the browser pass — no label naming a day after today on any window (the check that found
+  `08/11`; a month-end window on the month unit is the other case where a boundary sits next to the edge), the
+  dashboard over each of the four windows with the last session days old (the gap should sit between the last
+  point and the right edge, weekly lines unchanged), a song's percent chart and the session screen's quiet chart
+  closing the same way, and a session logged today landing inside the right edge rather than past it.
